@@ -1,0 +1,224 @@
+@using MudBlazor
+@using Triply.Core.Interfaces
+@inject ICameraService CameraService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudCard Elevation="2">
+    <MudCardContent>
+        @if (ImageBytes == null || ImageBytes.Length == 0)
+        {
+            <!-- No image captured yet -->
+            <MudStack AlignItems="AlignItems.Center" Spacing="3">
+                <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Large" Color="Color.Default" />
+                <MudText Typo="Typo.h6" Align="Align.Center">@Title</MudText>
+                <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                    @Description
+                </MudText>
+                
+                <MudStack Row="true" Spacing="2">
+                    @if (DeviceInfo.Current.Platform == DevicePlatform.Android || 
+                         DeviceInfo.Current.Platform == DevicePlatform.iOS)
+                    {
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Primary" 
+                                  StartIcon="@Icons.Material.Filled.CameraAlt"
+                                  OnClick="TakePhotoAsync"
+                                  Disabled="@_capturing">
+                            @if (_capturing)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                            }
+                            else
+                            {
+                                <span>Take Photo</span>
+                            }
+                        </MudButton>
+                    }
+                    
+                    <MudButton Variant="@(DeviceInfo.Current.Platform == DevicePlatform.Android || 
+                                         DeviceInfo.Current.Platform == DevicePlatform.iOS ? Variant.Outlined : Variant.Filled)" 
+                              Color="Color.Primary" 
+                              StartIcon="@Icons.Material.Filled.Upload"
+                              OnClick="UploadPhotoAsync"
+                              Disabled="@_capturing">
+                        Upload
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        }
+        else
+        {
+            <!-- Image captured -->
+            <MudStack Spacing="2">
+                <MudText Typo="Typo.subtitle1">@Title</MudText>
+                
+                <!-- Image preview -->
+                <div style="position: relative; display: inline-block;">
+                    <ImageComponent ImageBytes="@ImageBytes" 
+                                  Mode="ImageComponent.DisplayMode.Medium"
+                                  Clickable="false" />
+
+                    @if (ShowFileSize)
+                    {
+                        <MudChip T="string" 
+                                Size="Size.Small" 
+                                Icon="@Icons.Material.Filled.Photo"
+                                Style="position: absolute; top: 8px; left: 8px; background-color: rgba(0,0,0,0.7);">
+                            @GetFileSize()
+                        </MudChip>
+                    }
+                </div>
+                
+                <!-- Action buttons -->
+                <MudStack Row="true" Spacing="2">
+                    <MudButton Variant="Variant.Outlined" 
+                              Color="Color.Default" 
+                              StartIcon="@Icons.Material.Filled.Refresh"
+                              OnClick="RetakePhotoAsync"
+                              Disabled="@_capturing">
+                        Retake
+                    </MudButton>
+                    
+                    <MudButton Variant="Variant.Outlined" 
+                              Color="Color.Error" 
+                              StartIcon="@Icons.Material.Filled.Delete"
+                              OnClick="RemovePhotoAsync">
+                        Remove
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        }
+    </MudCardContent>
+</MudCard>
+
+@code {
+    [Parameter]
+    public byte[]? ImageBytes { get; set; }
+
+    [Parameter]
+    public EventCallback<byte[]?> ImageBytesChanged { get; set; }
+
+    [Parameter]
+    public string Title { get; set; } = "Receipt Photo";
+
+    [Parameter]
+    public string Description { get; set; } = "Capture or upload a photo of the receipt";
+
+    [Parameter]
+    public bool AutoCompress { get; set; } = true;
+
+    [Parameter]
+    public int MaxWidth { get; set; } = 1024;
+
+    [Parameter]
+    public int MaxHeight { get; set; } = 1024;
+
+    [Parameter]
+    public int Quality { get; set; } = 85;
+
+    [Parameter]
+    public bool ShowFileSize { get; set; } = true;
+
+    private bool _capturing = false;
+
+    private async Task TakePhotoAsync()
+    {
+        try
+        {
+            _capturing = true;
+            var photoBytes = await CameraService.CapturePhotoAsync();
+            
+            if (photoBytes != null)
+            {
+                await SetImageAsync(photoBytes);
+                Snackbar.Add("Photo captured successfully", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error capturing photo: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _capturing = false;
+        }
+    }
+
+    private async Task UploadPhotoAsync()
+    {
+        try
+        {
+            _capturing = true;
+            var photoBytes = await CameraService.PickPhotoAsync();
+            
+            if (photoBytes != null)
+            {
+                await SetImageAsync(photoBytes);
+                Snackbar.Add("Photo uploaded successfully", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error uploading photo: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _capturing = false;
+        }
+    }
+
+    private async Task RetakePhotoAsync()
+    {
+        try
+        {
+            _capturing = true;
+            var photoBytes = await CameraService.CaptureOrPickPhotoAsync();
+            
+            if (photoBytes != null)
+            {
+                await SetImageAsync(photoBytes);
+                Snackbar.Add("Photo updated successfully", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error retaking photo: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _capturing = false;
+        }
+    }
+
+    private async Task RemovePhotoAsync()
+    {
+        ImageBytes = null;
+        await ImageBytesChanged.InvokeAsync(null);
+        Snackbar.Add("Photo removed", Severity.Info);
+    }
+
+    private async Task SetImageAsync(byte[] photoBytes)
+    {
+        if (AutoCompress)
+        {
+            photoBytes = await CameraService.CompressImageAsync(photoBytes, MaxWidth, MaxHeight, Quality) ?? photoBytes;
+        }
+
+        ImageBytes = photoBytes;
+        await ImageBytesChanged.InvokeAsync(photoBytes);
+    }
+
+    private string GetFileSize()
+    {
+        if (ImageBytes == null || ImageBytes.Length == 0)
+            return "0 KB";
+
+        var kb = ImageBytes.Length / 1024.0;
+        if (kb < 1024)
+            return $"{kb:F1} KB";
+
+        var mb = kb / 1024.0;
+        return $"{mb:F1} MB";
+    }
+}

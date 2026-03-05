@@ -1,0 +1,216 @@
+@page "/settings/tax"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using CoreCompanySettings = Triply.Core.Models.CompanySettings
+@using Triply.Core.Interfaces
+@inject IUnitOfWork UnitOfWork
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>Tax Settings - Triply</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbs" Class="mb-4"></MudBreadcrumbs>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Class="mr-2" />
+    Tax Settings
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudCard Elevation="3">
+        <MudCardContent>
+            <MudGrid>
+                <!-- Filing Status -->
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-3">Tax Configuration</MudText>
+                    <MudDivider Class="mb-4" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudSelect @bind-Value="_settings.FiscalYearStart" 
+                              Label="Fiscal Year Start Month" 
+                              Variant="Variant.Outlined"
+                              T="int">
+                        <MudSelectItem Value="1">January</MudSelectItem>
+                        <MudSelectItem Value="2">February</MudSelectItem>
+                        <MudSelectItem Value="3">March</MudSelectItem>
+                        <MudSelectItem Value="4">April</MudSelectItem>
+                        <MudSelectItem Value="5">May</MudSelectItem>
+                        <MudSelectItem Value="6">June</MudSelectItem>
+                        <MudSelectItem Value="7">July</MudSelectItem>
+                        <MudSelectItem Value="8">August</MudSelectItem>
+                        <MudSelectItem Value="9">September</MudSelectItem>
+                        <MudSelectItem Value="10">October</MudSelectItem>
+                        <MudSelectItem Value="11">November</MudSelectItem>
+                        <MudSelectItem Value="12">December</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                
+                <!-- Tax Rates -->
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-3 mt-4">Tax Rates</MudText>
+                    <MudDivider Class="mb-4" />
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        <strong>Note:</strong> Federal income tax is calculated using progressive brackets. 
+                        Enter your average tax rate below for estimates.
+                    </MudAlert>
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudNumericField @bind-Value="_settings.FederalTaxRate" 
+                                    Label="Federal Tax Rate (%)" 
+                                    Variant="Variant.Outlined"
+                                    Min="0"
+                                    Max="100"
+                                    Step="0.1m"
+                                    T="decimal"
+                                    Adornment="Adornment.End"
+                                    AdornmentText="%" />
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudNumericField @bind-Value="_settings.StateTaxRate" 
+                                    Label="State Tax Rate (%)" 
+                                    Variant="Variant.Outlined"
+                                    Min="0"
+                                    Max="100"
+                                    Step="0.1m"
+                                    T="decimal"
+                                    Adornment="Adornment.End"
+                                    AdornmentText="%"
+                                    HelperText="Enter your state's income tax rate" />
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudNumericField @bind-Value="_settings.SelfEmploymentTaxRate" 
+                                    Label="Self-Employment Tax Rate (%)" 
+                                    Variant="Variant.Outlined"
+                                    Min="0"
+                                    Max="100"
+                                    Step="0.1m"
+                                    T="decimal"
+                                                                 Adornment="Adornment.End"
+                                                                 AdornmentText="%"
+                                                                 HelperText="Default: 15.3%" />
+                                            </MudItem>
+                                        </MudGrid>
+                                    </MudCardContent>
+        
+        <MudCardActions>
+            <MudButton Variant="Variant.Text" 
+                      Color="Color.Default" 
+                      OnClick="Cancel">
+                Cancel
+            </MudButton>
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      OnClick="SaveAsync"
+                      Disabled="@_saving">
+                @if (_saving)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                    <span class="ml-2">Saving...</span>
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Save" Class="mr-2" />
+                    <span>Save Changes</span>
+                }
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
+}
+
+@code {
+    private CoreCompanySettings _settings = new();
+    private bool _loading = true;
+    private bool _saving = false;
+
+    private List<BreadcrumbItem> _breadcrumbs = new()
+    {
+        new BreadcrumbItem("Settings", href: "/settings", icon: Icons.Material.Filled.Settings),
+        new BreadcrumbItem("Tax", href: null, disabled: true)
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettingsAsync();
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        try
+        {
+            _loading = true;
+
+            var settings = await UnitOfWork.CompanySettings.GetQueryable().FirstOrDefaultAsync();
+
+            if (settings != null)
+            {
+                _settings = settings;
+            }
+            else
+            {
+                // Create default settings
+                _settings = new CoreCompanySettings
+                {
+                    FiscalYearStart = 1,
+                    SelfEmploymentTaxRate = 15.3m,
+                    StateTaxRate = 0,
+                    FederalTaxRate = 22.0m
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading settings: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            _saving = true;
+            
+            if (_settings.Id == 0)
+            {
+                await UnitOfWork.CompanySettings.AddAsync(_settings);
+            }
+            else
+            {
+                await UnitOfWork.CompanySettings.UpdateAsync(_settings);
+            }
+            
+            await UnitOfWork.SaveChangesAsync();
+            
+            Snackbar.Add("Tax settings saved successfully", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving settings: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/settings");
+    }
+}

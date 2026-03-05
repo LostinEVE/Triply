@@ -1,0 +1,122 @@
+@namespace Triply.Components.Shared
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@using Triply.Components.Shared
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Class="mr-2" />
+            Select Loads to Invoice
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (!_unbilledLoads.Any())
+        {
+            <MudAlert Severity="Severity.Info">
+                No unbilled delivered loads found for this customer.
+            </MudAlert>
+        }
+        else
+        {
+            <MudDataGrid T="Load" 
+                         Items="@_unbilledLoads"
+                         SelectOnRowClick="true"
+                         SelectedItems="@_selectedLoads"
+                         SelectedItemsChanged="@((HashSet<Load> items) => _selectedLoads = items)"
+                         Dense="true"
+                         Hover="true"
+                         MultiSelection="true">
+                <Columns>
+                    <SelectColumn T="Load" />
+                    <PropertyColumn Property="x => x.LoadNumber" Title="Load #" />
+                    <PropertyColumn Property="x => x.PickupDate" Title="Date" Format="MM/dd/yyyy" />
+                    <TemplateColumn Title="Route">
+                        <CellTemplate>
+                            <MudText Typo="Typo.body2">
+                                @context.Item.PickupCity, @context.Item.PickupState → @context.Item.DeliveryCity, @context.Item.DeliveryState
+                            </MudText>
+                        </CellTemplate>
+                    </TemplateColumn>
+                    <PropertyColumn Property="x => x.Miles" Title="Miles" Format="N0" />
+                    <PropertyColumn Property="x => x.TotalAmount" Title="Amount" Format="C2" />
+                </Columns>
+            </MudDataGrid>
+            
+            <MudText Typo="Typo.body1" Class="mt-3">
+                Selected: <strong>@_selectedLoads.Count</strong> load(s) • 
+                Total: <strong>@_selectedLoads.Sum(l => l.TotalAmount).ToString("C2")</strong>
+            </MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" 
+                  Color="Color.Primary" 
+                  Disabled="@(!_selectedLoads.Any())"
+                  OnClick="OnConfirm">
+            Add Selected (@_selectedLoads.Count)
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter]
+    public Guid CustomerId { get; set; }
+
+    [Parameter]
+    public EventCallback<List<Load>> OnLoadsSelected { get; set; }
+
+    private List<Load> _unbilledLoads = new();
+    private HashSet<Load> _selectedLoads = new();
+    private bool _loading = true;
+    private bool _confirmed = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUnbilledLoadsAsync();
+    }
+
+    private async Task LoadUnbilledLoadsAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            _unbilledLoads = await UnitOfWork.Loads.GetQueryable()
+                .Where(l => l.CustomerId == CustomerId && l.Status == LoadStatus.Delivered)
+                .OrderByDescending(l => l.DeliveryDate)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading loads: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnConfirm()
+    {
+        if (OnLoadsSelected.HasDelegate)
+        {
+            await OnLoadsSelected.InvokeAsync(_selectedLoads.ToList());
+        }
+    }
+
+    private void Cancel()
+    {
+        // Dialog will close automatically
+    }
+}

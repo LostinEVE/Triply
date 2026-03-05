@@ -1,0 +1,203 @@
+@using MudBlazor
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@inject NavigationManager NavigationManager
+
+<MudDataGrid T="Invoice" 
+             Items="@Invoices" 
+             Dense="true"
+             Hover="true"
+             Striped="true"
+             RowsPerPage="25"
+             SortMode="SortMode.Multiple">
+    <Columns>
+        <TemplateColumn Title="Invoice #" Sortable="true" SortBy="@(x => x.InvoiceNumber)">
+            <CellTemplate>
+                <MudLink Href="@($"/invoices/{context.Item.InvoiceId}")" Typo="Typo.body2" Color="Color.Primary">
+                    <strong>@context.Item.InvoiceNumber</strong>
+                </MudLink>
+            </CellTemplate>
+        </TemplateColumn>
+        
+        <PropertyColumn Property="x => x.Customer.CompanyName" Title="Customer" />
+        
+        <PropertyColumn Property="x => x.InvoiceDate" Title="Date" Format="MM/dd/yyyy" />
+        
+        <TemplateColumn Title="Due Date" Sortable="true" SortBy="@(x => x.DueDate)">
+            <CellTemplate>
+                @if (context.Item.DueDate < DateTime.Now.Date && context.Item.Status != InvoiceStatus.Paid)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Error">
+                        @context.Item.DueDate.ToString("MM/dd/yyyy")
+                    </MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2">@context.Item.DueDate.ToString("MM/dd/yyyy")</MudText>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        
+        <TemplateColumn Title="Amount" Sortable="true" SortBy="@(x => x.TotalAmount)">
+            <CellTemplate>
+                <MudText Typo="Typo.body2">
+                    <strong>@context.Item.TotalAmount.ToString("C2")</strong>
+                </MudText>
+            </CellTemplate>
+        </TemplateColumn>
+        
+        <TemplateColumn Title="Balance" Sortable="true" SortBy="@(x => x.Balance)">
+            <CellTemplate>
+                @if (context.Item.Balance > 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Warning">
+                        @context.Item.Balance.ToString("C2")
+                    </MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Success">$0.00</MudText>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        
+        <TemplateColumn Title="Status">
+            <CellTemplate>
+                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Item)">
+                    @GetStatusText(context.Item)
+                </MudChip>
+            </CellTemplate>
+        </TemplateColumn>
+        
+        <TemplateColumn Title="Actions" Sortable="false">
+            <CellTemplate>
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true">
+                    <MudMenuItem Icon="@Icons.Material.Filled.Visibility" 
+                                OnClick="@(() => NavigateTo($"/invoices/{context.Item.InvoiceId}"))">
+                        View
+                    </MudMenuItem>
+                    
+                    @if (context.Item.Status == InvoiceStatus.Draft)
+                    {
+                        <MudMenuItem Icon="@Icons.Material.Filled.Edit" 
+                                    OnClick="@(() => NavigateTo($"/invoices/edit/{context.Item.InvoiceId}"))">
+                            Edit
+                        </MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.Send" 
+                                    OnClick="@(() => SendInvoice(context.Item))">
+                            Send
+                        </MudMenuItem>
+                    }
+                    
+                    @if (context.Item.Status == InvoiceStatus.Sent || context.Item.Status == InvoiceStatus.PartiallyPaid)
+                    {
+                        <MudMenuItem Icon="@Icons.Material.Filled.Payment" 
+                                    OnClick="@(() => RecordPayment(context.Item))">
+                            Record Payment
+                        </MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.Send" 
+                                    OnClick="@(() => SendInvoice(context.Item))">
+                            Resend
+                        </MudMenuItem>
+                    }
+                    
+                    <MudMenuItem Icon="@Icons.Material.Filled.PictureAsPdf" 
+                                OnClick="@(() => DownloadPDF(context.Item))">
+                        Download PDF
+                    </MudMenuItem>
+                    
+                    @if (context.Item.Status != InvoiceStatus.Paid && context.Item.Status != InvoiceStatus.Void)
+                    {
+                        <MudDivider />
+                        <MudMenuItem Icon="@Icons.Material.Filled.Block" 
+                                    OnClick="@(() => VoidInvoice(context.Item))">
+                            Void Invoice
+                        </MudMenuItem>
+                    }
+                    
+                    @if (context.Item.Status == InvoiceStatus.Draft)
+                    {
+                        <MudMenuItem Icon="@Icons.Material.Filled.Delete" 
+                                    OnClick="@(() => DeleteInvoice(context.Item))">
+                            Delete
+                        </MudMenuItem>
+                    }
+                </MudMenu>
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    
+    <PagerContent>
+        <MudDataGridPager T="Invoice" />
+    </PagerContent>
+</MudDataGrid>
+
+@code {
+    [Parameter]
+    public List<Invoice> Invoices { get; set; } = new();
+    
+    [Parameter]
+    public EventCallback OnRefresh { get; set; }
+
+    private Color GetStatusColor(Invoice invoice)
+    {
+        // Check for overdue first
+        if (invoice.DueDate < DateTime.Now.Date && invoice.Status != InvoiceStatus.Paid && invoice.Status != InvoiceStatus.Void)
+        {
+            return Color.Error;
+        }
+        
+        return invoice.Status switch
+        {
+            InvoiceStatus.Draft => Color.Default,
+            InvoiceStatus.Sent => Color.Info,
+            InvoiceStatus.Paid => Color.Success,
+            InvoiceStatus.PartiallyPaid => Color.Warning,
+            InvoiceStatus.Overdue => Color.Error,
+            InvoiceStatus.Void => Color.Dark,
+            _ => Color.Default
+        };
+    }
+
+    private string GetStatusText(Invoice invoice)
+    {
+        // Check for overdue
+        if (invoice.DueDate < DateTime.Now.Date && 
+            (invoice.Status == InvoiceStatus.Sent || invoice.Status == InvoiceStatus.PartiallyPaid))
+        {
+            return "Overdue";
+        }
+        
+        return invoice.Status.ToString();
+    }
+
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+    }
+
+    private void SendInvoice(Invoice invoice)
+    {
+        NavigationManager.NavigateTo($"/invoices/{invoice.InvoiceId}?action=send");
+    }
+
+    private void RecordPayment(Invoice invoice)
+    {
+        NavigationManager.NavigateTo($"/invoices/{invoice.InvoiceId}?action=payment");
+    }
+
+    private void DownloadPDF(Invoice invoice)
+    {
+        NavigationManager.NavigateTo($"/invoices/{invoice.InvoiceId}?action=pdf");
+    }
+
+    private void VoidInvoice(Invoice invoice)
+    {
+        NavigationManager.NavigateTo($"/invoices/{invoice.InvoiceId}?action=void");
+    }
+
+    private void DeleteInvoice(Invoice invoice)
+    {
+        NavigationManager.NavigateTo($"/invoices/{invoice.InvoiceId}?action=delete");
+    }
+}

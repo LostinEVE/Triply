@@ -1,0 +1,457 @@
+@page "/reports/profit-loss"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using CoreCompanySettings = Triply.Core.Models.CompanySettings
+@using Triply.Core.Models
+@using Triply.Core.Interfaces
+@inject IUnitOfWork UnitOfWork
+@inject ISnackbar Snackbar
+@inject IPdfGenerationService PdfService
+
+<PageTitle>Profit & Loss Report - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Class="mr-2" />
+    Profit & Loss Report
+</MudText>
+
+<!-- Filters -->
+<MudCard Elevation="3" Class="mb-3">
+    <MudCardContent>
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudSelect @bind-Value="_selectedPeriod" 
+                      Label="Period" 
+                      T="string"
+                      Variant="Variant.Outlined"
+                      Style="min-width: 150px;">
+                <MudSelectItem Value="@("thisMonth")">This Month</MudSelectItem>
+                <MudSelectItem Value="@("lastMonth")">Last Month</MudSelectItem>
+                <MudSelectItem Value="@("thisQuarter")">This Quarter</MudSelectItem>
+                <MudSelectItem Value="@("lastQuarter")">Last Quarter</MudSelectItem>
+                <MudSelectItem Value="@("thisYear")">This Year</MudSelectItem>
+                <MudSelectItem Value="@("lastYear")">Last Year</MudSelectItem>
+                <MudSelectItem Value="@("custom")">Custom Range</MudSelectItem>
+            </MudSelect>
+            
+            @if (_selectedPeriod == "custom")
+            {
+                <MudDatePicker @bind-Date="_startDate" 
+                              Label="Start Date" 
+                              Variant="Variant.Outlined" />
+                
+                <MudDatePicker @bind-Date="_endDate" 
+                              Label="End Date" 
+                              Variant="Variant.Outlined" />
+            }
+            
+            <MudSelect @bind-Value="_selectedTruckId" 
+                      Label="Truck" 
+                      T="string"
+                      Variant="Variant.Outlined"
+                      Clearable="true"
+                      Style="min-width: 150px;">
+                <MudSelectItem T="string" Value="@("")">All Trucks</MudSelectItem>
+                @foreach (var truck in _trucks)
+                {
+                    <MudSelectItem T="string" Value="@truck.TruckId">@truck.TruckId</MudSelectItem>
+                }
+            </MudSelect>
+            
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      OnClick="RunReportAsync"
+                      Disabled="@_loading">
+                Run Report
+            </MudButton>
+            
+            <MudSpacer />
+            
+            @if (_report != null)
+            {
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Default" 
+                          StartIcon="@Icons.Material.Filled.Print"
+                          OnClick="PrintReport">
+                    Print
+                </MudButton>
+                
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Error" 
+                          StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                          OnClick="ExportToPDFAsync">
+                    Export PDF
+                </MudButton>
+            }
+        </MudStack>
+    </MudCardContent>
+</MudCard>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_report != null)
+{
+    <!-- Report Header -->
+    <MudCard Elevation="3" Class="mb-3">
+        <MudCardContent>
+            <MudStack AlignItems="AlignItems.Center" Spacing="1">
+                <MudText Typo="Typo.h5">Profit & Loss Statement</MudText>
+                <MudText Typo="Typo.h6">@_companySettings.CompanyName</MudText>
+                <MudText Typo="Typo.body1">@_report.PeriodLabel</MudText>
+                @if (!string.IsNullOrEmpty(_selectedTruckId))
+                {
+                    <MudChip T="string" Size="Size.Small">Truck: @_selectedTruckId</MudChip>
+                }
+            </MudStack>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- Income Section -->
+    <MudCard Elevation="3" Class="mb-3">
+        <MudCardHeader Style="background-color: #4caf50; color: white;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">INCOME</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudTable Items="@_report.RevenueAccounts" Dense="true" Hover="true" Elevation="0">
+                <RowTemplate>
+                    <MudTd>@context.AccountName</MudTd>
+                    <MudTd Style="text-align: right;"><strong>@context.Balance.ToString("C2")</strong></MudTd>
+                    @if (_priorReport != null)
+                    {
+                        var priorAmount = _priorReport.RevenueAccounts.FirstOrDefault(a => a.AccountId == context.AccountId)?.Balance ?? 0;
+                        var change = context.Balance - priorAmount;
+                        var changePercent = priorAmount > 0 ? (change / priorAmount) * 100 : 0;
+                        <MudTd Style="text-align: right;">
+                            <MudText Typo="Typo.body2" Color="@(change >= 0 ? Color.Success : Color.Error)">
+                                @changePercent.ToString("+0.0;-0.0;0")%
+                            </MudText>
+                        </MudTd>
+                    }
+                </RowTemplate>
+            </MudTable>
+            
+            <MudDivider Class="my-2" />
+            
+            <MudStack Row="true" Justify="Justify.SpaceBetween" Class="pa-2" Style="background-color: #e8f5e9;">
+                <MudText Typo="Typo.h6">Total Revenue</MudText>
+                <MudText Typo="Typo.h6" Color="Color.Success">@_report.TotalRevenue.ToString("C2")</MudText>
+            </MudStack>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- Expenses Section -->
+    <MudCard Elevation="3" Class="mb-3">
+        <MudCardHeader Style="background-color: #f44336; color: white;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">EXPENSES</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (_report.TotalCOGS > 0)
+            {
+                <MudText Typo="Typo.subtitle1" Class="mb-2"><strong>Cost of Goods Sold</strong></MudText>
+                <MudTable Items="@_report.COGSAccounts" Dense="true" Hover="true" Elevation="0" Class="mb-3">
+                    <RowTemplate>
+                        <MudTd>@context.AccountName</MudTd>
+                        <MudTd Style="text-align: right;">@context.Balance.ToString("C2")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+                
+                <MudStack Row="true" Justify="Justify.SpaceBetween" Class="pa-2 mb-3" Style="background-color: #ffebee;">
+                    <MudText Typo="Typo.body1"><strong>Total COGS</strong></MudText>
+                    <MudText Typo="Typo.body1"><strong>@_report.TotalCOGS.ToString("C2")</strong></MudText>
+                </MudStack>
+                
+                <MudStack Row="true" Justify="Justify.SpaceBetween" Class="pa-2 mb-4" Style="background-color: #e3f2fd;">
+                    <MudText Typo="Typo.h6">Gross Profit</MudText>
+                    <MudText Typo="Typo.h6">
+                        @_report.GrossProfit.ToString("C2")
+                        <MudText Typo="Typo.caption" Inline="true" Class="ml-2">
+                            (@_report.GrossProfitMargin.ToString("N1")%)
+                        </MudText>
+                    </MudText>
+                </MudStack>
+            }
+            
+            <MudText Typo="Typo.subtitle1" Class="mb-2"><strong>Operating Expenses</strong></MudText>
+            <MudTable Items="@_report.OperatingExpenses.OrderByDescending(a => a.Balance)" Dense="true" Hover="true" Elevation="0">
+                <RowTemplate>
+                    <MudTd>@context.AccountName</MudTd>
+                    <MudTd Style="text-align: right;">@context.Balance.ToString("C2")</MudTd>
+                    <MudTd Style="text-align: right;">
+                        <MudText Typo="Typo.caption">
+                            @((_report.TotalRevenue > 0 ? (context.Balance / _report.TotalRevenue) * 100 : 0).ToString("N1"))%
+                        </MudText>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+            
+            <MudDivider Class="my-2" />
+            
+            <MudStack Row="true" Justify="Justify.SpaceBetween" Class="pa-2" Style="background-color: #ffebee;">
+                <MudText Typo="Typo.body1"><strong>Total Operating Expenses</strong></MudText>
+                <MudText Typo="Typo.body1"><strong>@_report.TotalOperatingExpenses.ToString("C2")</strong></MudText>
+            </MudStack>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- Net Income Section -->
+    <MudCard Elevation="3" Class="mb-3" Style="@($"border-left: 5px solid {(_report.NetIncome >= 0 ? "#4caf50" : "#f44336")};")">
+        <MudCardContent>
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="pa-3">
+                <div>
+                    <MudText Typo="Typo.h5">NET PROFIT/LOSS</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        Net Margin: @_report.NetProfitMargin.ToString("N1")%
+                    </MudText>
+                </div>
+                <MudText Typo="Typo.h4" Color="@(_report.NetIncome >= 0 ? Color.Success : Color.Error)">
+                    @_report.NetIncome.ToString("C2")
+                </MudText>
+            </MudStack>
+            
+            @if (_priorReport != null)
+            {
+                <MudDivider Class="my-3" />
+                
+                <MudText Typo="Typo.h6" Class="mb-2">Comparison to Previous Period</MudText>
+                <MudGrid>
+                    <MudItem xs="6" sm="3">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Revenue Change</MudText>
+                            <MudText Typo="Typo.body1" Color="@GetChangeColor(_report.TotalRevenue - _priorReport.TotalRevenue)">
+                                @(_report.TotalRevenue - _priorReport.TotalRevenue).ToString("C0")
+                                (@GetChangePercent(_priorReport.TotalRevenue, _report.TotalRevenue).ToString("+0.0;-0.0;0")%)
+                            </MudText>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="6" sm="3">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Expense Change</MudText>
+                            <MudText Typo="Typo.body1" Color="@GetChangeColor(_priorReport.TotalOperatingExpenses - _report.TotalOperatingExpenses)">
+                                @(_report.TotalOperatingExpenses - _priorReport.TotalOperatingExpenses).ToString("C0")
+                                (@GetChangePercent(_priorReport.TotalOperatingExpenses, _report.TotalOperatingExpenses).ToString("+0.0;-0.0;0")%)
+                            </MudText>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="6" sm="3">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Net Income Change</MudText>
+                            <MudText Typo="Typo.body1" Color="@GetChangeColor(_report.NetIncome - _priorReport.NetIncome)">
+                                @(_report.NetIncome - _priorReport.NetIncome).ToString("C0")
+                                (@GetChangePercent(_priorReport.NetIncome, _report.NetIncome).ToString("+0.0;-0.0;0")%)
+                            </MudText>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="6" sm="3">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Margin Change</MudText>
+                            <MudText Typo="Typo.body1" Color="@GetChangeColor(_report.NetProfitMargin - _priorReport.NetProfitMargin)">
+                                @(_report.NetProfitMargin - _priorReport.NetProfitMargin).ToString("+0.0;-0.0;0") pts
+                            </MudText>
+                        </MudStack>
+                    </MudItem>
+                </MudGrid>
+            }
+        </MudCardContent>
+    </MudCard>
+}
+else
+{
+    <MudAlert Severity="Severity.Info">
+        Select a date range and click "Run Report" to generate the Profit & Loss statement.
+    </MudAlert>
+}
+
+@code {
+    private IncomeStatement? _report;
+    private IncomeStatement? _priorReport;
+    private CoreCompanySettings _companySettings = new();
+    private List<Truck> _trucks = new();
+    
+    private bool _loading = false;
+    private string _selectedPeriod = "thisMonth";
+    private string _selectedTruckId = "";
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTrucksAsync();
+        await LoadCompanySettingsAsync();
+        SetPeriodDates();
+    }
+
+    private void SetPeriodDates()
+    {
+        var today = DateTime.Today;
+        (_startDate, _endDate) = _selectedPeriod switch
+        {
+            "thisMonth" => (new DateTime(today.Year, today.Month, 1), new DateTime(today.Year, today.Month, DateTime.DaysInMonth(today.Year, today.Month))),
+            "lastMonth" => (new DateTime(today.Year, today.Month, 1).AddMonths(-1), new DateTime(today.Year, today.Month, 1).AddDays(-1)),
+            "thisQuarter" => GetQuarterDates(today.Year, (today.Month - 1) / 3 + 1),
+            "lastQuarter" => GetQuarterDates(today.AddMonths(-3).Year, (today.AddMonths(-3).Month - 1) / 3 + 1),
+            "thisYear" => (new DateTime(today.Year, 1, 1), new DateTime(today.Year, 12, 31)),
+            "lastYear" => (new DateTime(today.Year - 1, 1, 1), new DateTime(today.Year - 1, 12, 31)),
+            _ => (_startDate, _endDate)
+        };
+    }
+
+    private (DateTime Start, DateTime End) GetQuarterDates(int year, int quarter)
+    {
+        var startMonth = (quarter - 1) * 3 + 1;
+        var start = new DateTime(year, startMonth, 1);
+        var end = start.AddMonths(3).AddDays(-1);
+        return (start, end);
+    }
+
+    private async Task LoadTrucksAsync()
+    {
+        try
+        {
+            _trucks = await UnitOfWork.Trucks.GetQueryable().OrderBy(t => t.TruckId).ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading trucks: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadCompanySettingsAsync()
+    {
+        try
+        {
+            _companySettings = await UnitOfWork.CompanySettings.GetQueryable().FirstOrDefaultAsync()
+                ?? new CoreCompanySettings { CompanyName = "Your Company" };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading company settings: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RunReportAsync()
+    {
+        if (!_startDate.HasValue || !_endDate.HasValue)
+        {
+            Snackbar.Add("Please select a valid date range", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            _loading = true;
+            
+            // Generate current period report
+            _report = await GenerateIncomeStatementAsync(_startDate.Value, _endDate.Value);
+            
+            // Generate prior period for comparison
+            var periodLength = (_endDate.Value - _startDate.Value).Days;
+            var priorStart = _startDate.Value.AddDays(-periodLength - 1);
+            var priorEnd = _startDate.Value.AddDays(-1);
+            _priorReport = await GenerateIncomeStatementAsync(priorStart, priorEnd);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error generating report: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task<IncomeStatement> GenerateIncomeStatementAsync(DateTime startDate, DateTime endDate)
+    {
+        var report = new IncomeStatement
+        {
+            StartDate = startDate,
+            EndDate = endDate
+        };
+
+        // Get loads query
+        var loadsQuery = UnitOfWork.Loads.GetQueryable()
+            .Where(l => l.DeliveryDate.HasValue && 
+                       l.DeliveryDate.Value >= startDate && 
+                       l.DeliveryDate.Value <= endDate);
+
+        if (!string.IsNullOrEmpty(_selectedTruckId))
+        {
+            loadsQuery = loadsQuery.Where(l => l.TruckId == _selectedTruckId);
+        }
+
+        var loads = await loadsQuery.ToListAsync();
+        
+        // Revenue from loads
+        var totalRevenue = loads.Sum(l => l.TotalAmount);
+        report.RevenueAccounts.Add(new AccountBalance
+        {
+            AccountId = 1,
+            AccountName = "Freight Revenue",
+            Balance = totalRevenue
+        });
+
+        // Get expenses
+        var expensesQuery = UnitOfWork.Expenses.GetQueryable()
+            .Where(e => e.ExpenseDate >= startDate && e.ExpenseDate <= endDate);
+
+        if (!string.IsNullOrEmpty(_selectedTruckId))
+        {
+            expensesQuery = expensesQuery.Where(e => e.TruckId == _selectedTruckId);
+        }
+
+        var expenses = await expensesQuery.ToListAsync();
+        
+        // Group expenses by category
+        var expensesByCategory = expenses
+            .GroupBy(e => e.Category.ToString())
+            .Select(g => new AccountBalance
+            {
+                AccountName = g.Key,
+                Balance = g.Sum(e => e.Amount)
+            })
+            .ToList();
+
+        report.OperatingExpenses = expensesByCategory;
+
+        return report;
+    }
+
+    private Color GetChangeColor(decimal change)
+    {
+        return change >= 0 ? Color.Success : Color.Error;
+    }
+
+    private decimal GetChangePercent(decimal prior, decimal current)
+    {
+        return prior != 0 ? ((current - prior) / Math.Abs(prior)) * 100 : 0;
+    }
+
+    private void PrintReport()
+    {
+        // TODO: Implement print functionality
+        Snackbar.Add("Print functionality coming soon", Severity.Info);
+    }
+
+    private async Task ExportToPDFAsync()
+    {
+        try
+        {
+            if (_report == null) return;
+            
+            var pdfBytes = await PdfService.GenerateProfitLossReportAsync(_report, _companySettings, _priorReport);
+            
+            // Trigger download
+            var fileName = $"ProfitLoss_{_report.StartDate:yyyyMMdd}_{_report.EndDate:yyyyMMdd}.pdf";
+            // TODO: Implement file download
+            Snackbar.Add("PDF generated successfully", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error generating PDF: {ex.Message}", Severity.Error);
+        }
+    }
+}

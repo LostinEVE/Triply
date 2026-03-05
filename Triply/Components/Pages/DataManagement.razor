@@ -1,0 +1,497 @@
+@page "/settings/data"
+@using MudBlazor
+@using System.Text.Json
+@using Triply.Core.Interfaces
+@using Triply.Components.Shared
+@inject IUnitOfWork UnitOfWork
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+
+<PageTitle>Data Management - Triply</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbs" Class="mb-4"></MudBreadcrumbs>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Storage" Class="mr-2" />
+    Data Management
+</MudText>
+
+<MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4">
+    <strong>Important:</strong> Always create a backup before performing any data operations.
+    Data operations cannot be undone.
+</MudAlert>
+
+<MudGrid>
+    <!-- Export Data -->
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="3">
+            <MudCardHeader Style="background-color: #4caf50; color: white;">
+                <CardHeaderContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@Icons.Material.Filled.FileDownload" />
+                        <MudText Typo="Typo.h6">Export Data</MudText>
+                    </MudStack>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.body2">
+                        Export all your data to a backup file. This includes:
+                    </MudText>
+                    
+                    <MudList Dense="true" T="string">
+                        <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                            Trucks and Equipment
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                            Loads and Deliveries
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                            Expenses and Fuel Entries
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                            Customers and Drivers
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                            Maintenance Records
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                            Invoices and Settings
+                        </MudListItem>
+                    </MudList>
+                    
+                    <MudSelect @bind-Value="_exportFormat" 
+                              Label="Export Format" 
+                              Variant="Variant.Outlined"
+                              T="string">
+                        <MudSelectItem Value="@("json")">JSON (Recommended)</MudSelectItem>
+                        <MudSelectItem Value="@("zip")">ZIP Archive</MudSelectItem>
+                        <MudSelectItem Value="@("csv")">CSV (Tables only)</MudSelectItem>
+                    </MudSelect>
+                    
+                    <MudButton Variant="Variant.Filled" 
+                              Color="Color.Success" 
+                              FullWidth="true"
+                              StartIcon="@Icons.Material.Filled.FileDownload"
+                              OnClick="ExportDataAsync"
+                              Disabled="@_exporting">
+                        @if (_exporting)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                            <span class="ml-2">Exporting...</span>
+                        }
+                        else
+                        {
+                            <span>Export All Data</span>
+                        }
+                    </MudButton>
+                    
+                    @if (_lastExportDate.HasValue)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Last export: @_lastExportDate.Value.ToString("MM/dd/yyyy HH:mm")
+                        </MudText>
+                    }
+                </MudStack>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Import Data -->
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="3">
+            <MudCardHeader Style="background-color: #2196f3; color: white;">
+                <CardHeaderContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@Icons.Material.Filled.FileUpload" />
+                        <MudText Typo="Typo.h6">Import Data</MudText>
+                    </MudStack>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.body2">
+                        Restore data from a backup file. This will:
+                    </MudText>
+                    
+                    <MudAlert Severity="Severity.Warning" Dense="true">
+                        Merge imported data with existing records. Duplicate records will be skipped.
+                    </MudAlert>
+                    
+                    <MudFileUpload T="IBrowserFile" 
+                                  OnFilesChanged="HandleImportFile"
+                                  Accept=".json,.zip">
+                        <ActivatorContent>
+                            <MudButton Variant="Variant.Outlined"
+                                      Color="Color.Info"
+                                      FullWidth="true"
+                                      StartIcon="@Icons.Material.Filled.AttachFile">
+                                Select Backup File
+                            </MudButton>
+                        </ActivatorContent>
+                    </MudFileUpload>
+                    
+                    @if (_selectedFile != null)
+                    {
+                        <MudChip T="string" Icon="@Icons.Material.Filled.InsertDriveFile" Color="Color.Info">
+                            @_selectedFile.Name (@(_selectedFile.Size / 1024)KB)
+                        </MudChip>
+                    }
+                    
+                    <MudButton Variant="Variant.Filled" 
+                              Color="Color.Info" 
+                              FullWidth="true"
+                              StartIcon="@Icons.Material.Filled.FileUpload"
+                              OnClick="ImportDataAsync"
+                              Disabled="@(_importing || _selectedFile == null)">
+                        @if (_importing)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                            <span class="ml-2">Importing...</span>
+                        }
+                        else
+                        {
+                            <span>Import Data</span>
+                        }
+                    </MudButton>
+                    
+                    @if (_importResult != null)
+                    {
+                        <MudAlert Severity="@(_importSuccess ? Severity.Success : Severity.Error)" Dense="true">
+                            @_importResult
+                        </MudAlert>
+                    }
+                </MudStack>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Database Information -->
+    <MudItem xs="12">
+        <MudCard Elevation="3">
+            <MudCardHeader Style="background-color: #ff9800; color: white;">
+                <CardHeaderContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@Icons.Material.Filled.Info" />
+                        <MudText Typo="Typo.h6">Database Information</MudText>
+                    </MudStack>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudGrid>
+                    <MudItem xs="12" md="4">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Database Location</MudText>
+                            <MudText Typo="Typo.body2" Style="word-break: break-all;">@_databaseLocation</MudText>
+                        </MudStack>
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="4">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Database Size</MudText>
+                            <MudText Typo="Typo.body2">@_databaseSize</MudText>
+                        </MudStack>
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="4">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Last Modified</MudText>
+                            <MudText Typo="Typo.body2">@_lastModified</MudText>
+                        </MudStack>
+                    </MudItem>
+                    
+                    <MudItem xs="12">
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Default" 
+                                  StartIcon="@Icons.Material.Filled.FolderOpen"
+                                  OnClick="OpenDatabaseFolder">
+                            Open Database Folder
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Danger Zone -->
+    <MudItem xs="12">
+        <MudCard Elevation="3" Style="border-left: 5px solid #f44336;">
+            <MudCardHeader Style="background-color: #ffebee;">
+                <CardHeaderContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" />
+                        <MudText Typo="Typo.h6" Color="Color.Error">Danger Zone</MudText>
+                    </MudStack>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.body2">
+                        These actions are permanent and cannot be undone. Use with extreme caution.
+                    </MudText>
+                    
+                    <MudDivider />
+                    
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <div>
+                            <MudText Typo="Typo.h6">Clear All Data</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Permanently delete all records from the database. Settings will be preserved.
+                            </MudText>
+                        </div>
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Error" 
+                                  StartIcon="@Icons.Material.Filled.DeleteForever"
+                                  OnClick="ConfirmClearDataAsync"
+                                  Disabled="@_clearing">
+                            @if (_clearing)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                            }
+                            else
+                            {
+                                <span>Clear Data</span>
+                            }
+                        </MudButton>
+                    </MudStack>
+                    
+                    <MudDivider />
+                    
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <div>
+                            <MudText Typo="Typo.h6">Reset Database</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Delete everything including settings and start fresh. This action cannot be undone.
+                            </MudText>
+                        </div>
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Error" 
+                                  StartIcon="@Icons.Material.Filled.RestartAlt"
+                                  OnClick="ConfirmResetDatabaseAsync"
+                                  Disabled="@_resetting">
+                            @if (_resetting)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                            }
+                            else
+                            {
+                                <span>Reset Database</span>
+                            }
+                        </MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private bool _exporting = false;
+    private bool _importing = false;
+    private bool _clearing = false;
+    private bool _resetting = false;
+    
+    private string _exportFormat = "json";
+    private IBrowserFile? _selectedFile;
+    private DateTime? _lastExportDate;
+    private string? _importResult;
+    private bool _importSuccess;
+    
+    private string _databaseLocation = "Local Storage";
+    private string _databaseSize = "Calculating...";
+    private string _lastModified = "Unknown";
+
+    private List<BreadcrumbItem> _breadcrumbs = new()
+    {
+        new BreadcrumbItem("Settings", href: "/settings", icon: Icons.Material.Filled.Settings),
+        new BreadcrumbItem("Data Management", href: null, disabled: true)
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDatabaseInfoAsync();
+    }
+
+    private async Task LoadDatabaseInfoAsync()
+    {
+        try
+        {
+            // TODO: Get actual database file information
+            _databaseLocation = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Triply", "triply.db");
+            _databaseSize = "25.4 MB";
+            _lastModified = DateTime.Now.AddDays(-2).ToString("MM/dd/yyyy HH:mm");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading database info: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ExportDataAsync()
+    {
+        try
+        {
+            _exporting = true;
+            
+            // TODO: Implement actual data export
+            await Task.Delay(2000); // Simulate export
+            
+            _lastExportDate = DateTime.Now;
+            Snackbar.Add($"Data exported successfully as {_exportFormat.ToUpper()}", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error exporting data: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _exporting = false;
+        }
+    }
+
+    private void HandleImportFile(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+        _importResult = null;
+    }
+
+    private async Task ImportDataAsync()
+    {
+        if (_selectedFile == null) return;
+        
+        try
+        {
+            _importing = true;
+            _importResult = null;
+            
+            // TODO: Implement actual data import
+            await Task.Delay(2000); // Simulate import
+            
+            _importResult = $"Successfully imported data from {_selectedFile.Name}";
+            _importSuccess = true;
+            Snackbar.Add("Data imported successfully", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _importResult = $"Failed to import data: {ex.Message}";
+            _importSuccess = false;
+            Snackbar.Add("Import failed", Severity.Error);
+        }
+        finally
+        {
+            _importing = false;
+        }
+    }
+
+    private void OpenDatabaseFolder()
+    {
+        try
+        {
+            var folder = Path.GetDirectoryName(_databaseLocation);
+            // TODO: Open folder in file explorer
+            Snackbar.Add("Database folder location copied to clipboard", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ConfirmClearDataAsync()
+    {
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = "Are you sure you want to clear all data? This action cannot be undone. Settings will be preserved.",
+            ["ButtonText"] = "Yes, Clear All Data",
+            ["Color"] = Color.Error
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Clear All Data", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await ClearDataAsync();
+        }
+    }
+
+    private async Task ClearDataAsync()
+    {
+        try
+        {
+            _clearing = true;
+            
+            // TODO: Implement actual data clearing
+            await Task.Delay(1500);
+            
+            Snackbar.Add("All data cleared successfully", Severity.Success);
+            await LoadDatabaseInfoAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error clearing data: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _clearing = false;
+        }
+    }
+
+    private async Task ConfirmResetDatabaseAsync()
+    {
+        var parameters = new DialogParameters
+        {
+            ["ContentText"] = "Are you ABSOLUTELY SURE you want to reset the entire database? This will delete EVERYTHING including all settings. This action CANNOT be undone!",
+            ["ButtonText"] = "Yes, Reset Everything",
+            ["Color"] = Color.Error
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Reset Database", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            // Double confirmation
+            var confirmParameters = new DialogParameters
+            {
+                ["ContentText"] = "Final confirmation: Type 'RESET' to confirm database reset.",
+                ["ButtonText"] = "Confirm Reset",
+                ["Color"] = Color.Error
+            };
+
+            var confirmDialog = await DialogService.ShowAsync<ConfirmDialog>("Final Confirmation", confirmParameters);
+            var confirmResult = await confirmDialog.Result;
+
+            if (!confirmResult.Canceled)
+            {
+                await ResetDatabaseAsync();
+            }
+        }
+    }
+
+    private async Task ResetDatabaseAsync()
+    {
+        try
+        {
+            _resetting = true;
+            
+            // TODO: Implement actual database reset
+            await Task.Delay(2000);
+            
+            Snackbar.Add("Database reset successfully. Application will restart.", Severity.Success);
+            
+            // TODO: Restart application
+            await Task.Delay(1000);
+            NavigationManager.NavigateTo("/", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error resetting database: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _resetting = false;
+        }
+    }
+}

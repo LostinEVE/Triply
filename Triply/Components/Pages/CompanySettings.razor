@@ -1,0 +1,347 @@
+@page "/settings/company"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using CoreCompanySettings = Triply.Core.Models.CompanySettings
+@using Triply.Core.Models
+@using Triply.Core.Interfaces
+@inject IUnitOfWork UnitOfWork
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>Company Settings - Triply</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbs" Class="mb-4"></MudBreadcrumbs>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Business" Class="mr-2" />
+    Company Information
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudCard Elevation="3">
+        <MudCardContent>
+            <MudGrid>
+                <!-- Company Information Section -->
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-3">Company Information</MudText>
+                    <MudDivider Class="mb-4" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_settings.CompanyName" 
+                                 Label="Company Name" 
+                                 Variant="Variant.Outlined"
+                                 Required="true" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_settings.DBA" 
+                                 Label="DBA (Doing Business As)" 
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_settings.DOTNumber" 
+                                 Label="DOT Number" 
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_settings.MCNumber" 
+                                 Label="MC Number" 
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_settings.EIN" 
+                                 Label="EIN (Tax ID)" 
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <!-- Address Section -->
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-3 mt-4">Address</MudText>
+                    <MudDivider Class="mb-4" />
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_settings.Address" 
+                                 Label="Street Address" 
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_settings.City" 
+                                 Label="City" 
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <MudItem xs="12" md="3">
+                    <MudTextField @bind-Value="_settings.State" 
+                                 Label="State" 
+                                 Variant="Variant.Outlined" 
+                                 MaxLength="2" />
+                </MudItem>
+                
+                <MudItem xs="12" md="3">
+                    <MudTextField @bind-Value="_settings.Zip" 
+                                 Label="ZIP Code" 
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <!-- Contact Information -->
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-3 mt-4">Contact Information</MudText>
+                    <MudDivider Class="mb-4" />
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_settings.Phone" 
+                                 Label="Phone" 
+                                 Variant="Variant.Outlined"
+                                 InputType="InputType.Telephone" />
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_settings.Email" 
+                                 Label="Email" 
+                                 Variant="Variant.Outlined"
+                                 InputType="InputType.Email" />
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_settings.Website" 
+                                 Label="Website" 
+                                 Variant="Variant.Outlined"
+                                 InputType="InputType.Url" />
+                </MudItem>
+                
+                <!-- Logo Upload -->
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-3 mt-4">Company Logo</MudText>
+                    <MudDivider Class="mb-4" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudFileUpload T="IBrowserFile" 
+                                  OnFilesChanged="HandleLogoUpload"
+                                  Accept="image/*">
+                        <ActivatorContent>
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Primary"
+                                      StartIcon="@Icons.Material.Filled.CloudUpload">
+                                Upload Logo
+                            </MudButton>
+                        </ActivatorContent>
+                    </MudFileUpload>
+                    <MudText Typo="Typo.caption" Class="mt-2">
+                        Recommended: PNG or JPG, max 2MB, square format
+                    </MudText>
+                </MudItem>
+                
+                @if (_settings.LogoImage != null && _settings.LogoImage.Length > 0)
+                {
+                    <MudItem xs="12" md="6">
+                        <MudStack AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.caption">Logo preview (stored as bytes)</MudText>
+                            <MudButton Variant="Variant.Text" 
+                                      Color="Color.Error" 
+                                      StartIcon="@Icons.Material.Filled.Delete"
+                                      OnClick="RemoveLogo">
+                                Remove Logo
+                            </MudButton>
+                        </MudStack>
+                    </MudItem>
+                }
+                
+                <!-- Invoice Settings -->
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-3 mt-4">Invoice Settings</MudText>
+                    <MudDivider Class="mb-4" />
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_settings.InvoicePrefix" 
+                                 Label="Invoice Prefix" 
+                                 Variant="Variant.Outlined"
+                                 HelperText="e.g., INV-"
+                                 MaxLength="10" />
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudNumericField @bind-Value="_settings.NextInvoiceNumber" 
+                                    Label="Next Invoice Number" 
+                                    Variant="Variant.Outlined"
+                                    Min="1"
+                                    T="int" />
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudSelect @bind-Value="_settings.DefaultPaymentTerms" 
+                              Label="Default Payment Terms" 
+                              Variant="Variant.Outlined"
+                              T="string">
+                        <MudSelectItem Value="@("Net15")">Net 15</MudSelectItem>
+                        <MudSelectItem Value="@("Net30")">Net 30</MudSelectItem>
+                        <MudSelectItem Value="@("Net45")">Net 45</MudSelectItem>
+                        <MudSelectItem Value="@("Net60")">Net 60</MudSelectItem>
+                        <MudSelectItem Value="@("DueOnReceipt")">Due on Receipt</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <!-- Remove invoice notes as not in model -->
+            </MudGrid>
+        </MudCardContent>
+        
+        <MudCardActions>
+            <MudButton Variant="Variant.Text" 
+                      Color="Color.Default" 
+                      OnClick="Cancel">
+                Cancel
+            </MudButton>
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      OnClick="SaveAsync"
+                      Disabled="@_saving">
+                @if (_saving)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                    <span class="ml-2">Saving...</span>
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Save" Class="mr-2" />
+                    <span>Save Changes</span>
+                }
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
+}
+
+@code {
+    private CoreCompanySettings _settings = new();
+    private bool _loading = true;
+    private bool _saving = false;
+
+    private List<BreadcrumbItem> _breadcrumbs = new()
+    {
+        new BreadcrumbItem("Settings", href: "/settings", icon: Icons.Material.Filled.Settings),
+        new BreadcrumbItem("Company", href: null, disabled: true)
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettingsAsync();
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            var settings = await UnitOfWork.CompanySettings.GetQueryable().FirstOrDefaultAsync();
+            
+            if (settings != null)
+            {
+                _settings = settings;
+            }
+            else
+            {
+                // Create default settings
+                _settings = new CoreCompanySettings
+                {
+                    CompanyName = "Your Company",
+                    InvoicePrefix = "INV",
+                    NextInvoiceNumber = 1000,
+                    DefaultPaymentTerms = "Net30"
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading settings: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task HandleLogoUpload(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            
+            if (file.Size > 2097152) // 2MB
+            {
+                Snackbar.Add("File size must be less than 2MB", Severity.Warning);
+                return;
+            }
+            
+            // TODO: Implement file upload to storage
+            // For now, just convert to bytes
+            using var ms = new MemoryStream();
+            await file.OpenReadStream().CopyToAsync(ms);
+            _settings.LogoImage = ms.ToArray();
+            Snackbar.Add("Logo uploaded successfully", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error uploading logo: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void RemoveLogo()
+    {
+        _settings.LogoImage = null;
+        Snackbar.Add("Logo removed", Severity.Info);
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            _saving = true;
+            
+            if (string.IsNullOrWhiteSpace(_settings.CompanyName))
+            {
+                Snackbar.Add("Company name is required", Severity.Warning);
+                return;
+            }
+            
+            if (_settings.Id == 0)
+            {
+                await UnitOfWork.CompanySettings.AddAsync(_settings);
+            }
+            else
+            {
+                await UnitOfWork.CompanySettings.UpdateAsync(_settings);
+            }
+            
+            await UnitOfWork.SaveChangesAsync();
+            
+            Snackbar.Add("Company settings saved successfully", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving settings: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/settings");
+    }
+}

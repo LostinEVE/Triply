@@ -1,0 +1,416 @@
+@page "/expenses"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using System.Text
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+
+<PageTitle>Expenses - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Receipt" Class="mr-2" />
+    Expenses
+    @if (_expenses != null && _filteredExpenses != null)
+    {
+        <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-2">
+            @_filteredExpenses.Count() of @_expenses.Count
+        </MudChip>
+    }
+</MudText>
+
+<MudCard Elevation="3" Class="mb-3">
+    <MudCardContent>
+        <MudText Typo="Typo.h6" Class="mb-3">
+            <MudIcon Icon="@Icons.Material.Filled.FilterList" Class="mr-2" />
+            Filters
+        </MudText>
+        
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudDatePicker Date="@_startDate" 
+                              DateChanged="@((DateTime? date) => { _startDate = date; ApplyFilters(); })"
+                              Label="Start Date" 
+                              Variant="Variant.Outlined"
+                              Clearable="true" />
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudDatePicker Date="@_endDate" 
+                              DateChanged="@((DateTime? date) => { _endDate = date; ApplyFilters(); })"
+                              Label="End Date" 
+                              Variant="Variant.Outlined"
+                              Clearable="true" />
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect Value="@_selectedCategory" 
+                          ValueChanged="@((ExpenseCategory? cat) => { _selectedCategory = cat; ApplyFilters(); })"
+                          Label="Category" 
+                          T="ExpenseCategory?"
+                          Variant="Variant.Outlined"
+                          Clearable="true"
+                          Multiple="false">
+                    <MudSelectItem T="ExpenseCategory?" Value="@((ExpenseCategory?)null)">All Categories</MudSelectItem>
+                    @foreach (ExpenseCategory category in Enum.GetValues(typeof(ExpenseCategory)))
+                    {
+                        <MudSelectItem T="ExpenseCategory?" Value="@category">@category</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            
+            <MudItem xs="12" sm="6" md="3">
+                <TruckSelector SelectedTruckId="@_selectedTruckId"
+                              SelectedTruckIdChanged="@UpdateTruckFilter"
+                              Label="Truck"
+                              ShowAllOption="true"
+                              Clearable="true" />
+            </MudItem>
+            
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect Value="@_selectedPaymentMethod" 
+                          ValueChanged="@((PaymentMethod? method) => { _selectedPaymentMethod = method; ApplyFilters(); })"
+                          Label="Payment Method" 
+                          T="PaymentMethod?"
+                          Variant="Variant.Outlined"
+                          Clearable="true">
+                    <MudSelectItem T="PaymentMethod?" Value="@((PaymentMethod?)null)">All Methods</MudSelectItem>
+                    @foreach (PaymentMethod method in Enum.GetValues(typeof(PaymentMethod)))
+                    {
+                        <MudSelectItem T="PaymentMethod?" Value="@method">@method</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudTextField Value="@_searchString" 
+                             ValueChanged="@((string search) => { _searchString = search; ApplyFilters(); })"
+                             Placeholder="Search vendor, description..." 
+                             Adornment="Adornment.Start" 
+                             AdornmentIcon="@Icons.Material.Filled.Search"
+                             Variant="Variant.Outlined"
+                             Immediate="true" />
+            </MudItem>
+            
+            <MudItem xs="12" sm="6" md="3">
+                <MudStack Row="true" Spacing="2">
+                    <MudButton Variant="Variant.Outlined" 
+                              Color="Color.Default" 
+                              StartIcon="@Icons.Material.Filled.Clear"
+                              OnClick="ClearFilters">
+                        Clear
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" 
+                              Color="Color.Success" 
+                              StartIcon="@Icons.Material.Filled.Download"
+                              OnClick="ExportToCSV">
+                        Export CSV
+                    </MudButton>
+                </MudStack>
+            </MudItem>
+        </MudGrid>
+    </MudCardContent>
+</MudCard>
+
+<MudCard Elevation="3">
+    <MudCardContent>
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
+            <MudText Typo="Typo.h6">
+                Total: <strong class="expense-total">@_filteredTotal.ToString("C2")</strong>
+            </MudText>
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      StartIcon="@Icons.Material.Filled.Add"
+                      OnClick="@(() => NavigateTo("/expenses/add"))">
+                Add Expense
+            </MudButton>
+        </MudStack>
+
+        <MudDataGrid T="Expense" 
+                     Items="@_filteredExpenses" 
+                     Loading="@_loading"
+                     Dense="true"
+                     Hover="true"
+                     Striped="true"
+                     RowsPerPage="25"
+                     SortMode="SortMode.Multiple">
+            <Columns>
+                <PropertyColumn Property="x => x.ExpenseDate" 
+                               Title="Date" 
+                               Format="MM/dd/yyyy" />
+                
+                <TemplateColumn Title="Category" Sortable="true">
+                    <CellTemplate>
+                        <MudChip T="string" 
+                                Size="Size.Small" 
+                                Color="@GetCategoryColor(context.Item.Category)">
+                            @context.Item.Category
+                        </MudChip>
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <PropertyColumn Property="x => x.Vendor" Title="Vendor" />
+                
+                <TemplateColumn Title="Description" Sortable="false">
+                    <CellTemplate>
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.body2">@context.Item.Description</MudText>
+                            @if (context.Item.ReceiptImage != null)
+                            {
+                                <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Image" Color="Color.Info">
+                                    Receipt
+                                </MudChip>
+                            }
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <TemplateColumn Title="Amount" Sortable="true" SortBy="@(x => x.Amount)">
+                    <CellTemplate>
+                        <MudText Typo="Typo.body2" Color="Color.Error">
+                            <strong>@context.Item.Amount.ToString("C2")</strong>
+                        </MudText>
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <TemplateColumn Title="Truck">
+                    <CellTemplate>
+                        @if (!string.IsNullOrEmpty(context.Item.TruckId))
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                                @context.Item.TruckId
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">General</MudText>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <PropertyColumn Property="x => x.PaymentMethod" Title="Payment" />
+                
+                <TemplateColumn Title="Actions" Sortable="false">
+                    <CellTemplate>
+                        <MudStack Row="true" Spacing="1">
+                            <MudTooltip Text="Edit">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                             Size="Size.Small" 
+                                             Color="Color.Info"
+                                             OnClick="@(() => NavigateTo($"/expenses/edit/{context.Item.ExpenseId}"))"/>
+                            </MudTooltip>
+                            @if (context.Item.ReceiptImage != null)
+                            {
+                                <MudTooltip Text="View Receipt">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Image" 
+                                                 Size="Size.Small" 
+                                                 Color="Color.Primary"
+                                                 OnClick="@(() => ViewReceipt(context.Item))"/>
+                                </MudTooltip>
+                            }
+                            <MudTooltip Text="Delete">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                             Size="Size.Small" 
+                                             Color="Color.Error"
+                                             OnClick="@(() => DeleteExpense(context.Item))"/>
+                            </MudTooltip>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            
+            <PagerContent>
+                <MudDataGridPager T="Expense" />
+            </PagerContent>
+        </MudDataGrid>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private List<Expense> _expenses = new();
+    private IEnumerable<Expense> _filteredExpenses = new List<Expense>();
+    private bool _loading = true;
+    
+    // Filters
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+    private ExpenseCategory? _selectedCategory;
+    private string? _selectedTruckId;
+    private PaymentMethod? _selectedPaymentMethod;
+    private string _searchString = "";
+    
+    private decimal _filteredTotal = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Default to current month
+        _startDate = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
+        _endDate = DateTime.Now.Date;
+        
+        await LoadExpensesAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Check for query string filters
+        var uri = new Uri(NavigationManager.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        
+        if (query["truckId"] != null)
+        {
+            _selectedTruckId = query["truckId"];
+        }
+    }
+
+    private async Task LoadExpensesAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            _expenses = await UnitOfWork.Expenses.GetQueryable()
+                .Include(e => e.Truck)
+                .OrderByDescending(e => e.ExpenseDate)
+                .ToListAsync();
+            
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading expenses: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        var filtered = _expenses.AsEnumerable();
+        
+        // Date range
+        if (_startDate.HasValue)
+        {
+            filtered = filtered.Where(e => e.ExpenseDate >= _startDate.Value);
+        }
+        if (_endDate.HasValue)
+        {
+            filtered = filtered.Where(e => e.ExpenseDate <= _endDate.Value.AddDays(1));
+        }
+        
+        // Category
+        if (_selectedCategory.HasValue)
+        {
+            filtered = filtered.Where(e => e.Category == _selectedCategory.Value);
+        }
+        
+        // Truck
+        if (!string.IsNullOrEmpty(_selectedTruckId))
+        {
+            filtered = filtered.Where(e => e.TruckId == _selectedTruckId);
+        }
+        
+        // Payment method
+        if (_selectedPaymentMethod.HasValue)
+        {
+            filtered = filtered.Where(e => e.PaymentMethod == _selectedPaymentMethod.Value);
+        }
+        
+        // Search
+        if (!string.IsNullOrWhiteSpace(_searchString))
+        {
+            filtered = filtered.Where(e =>
+                (e.Vendor?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true) ||
+                (e.Description?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true));
+        }
+        
+        _filteredExpenses = filtered.ToList();
+        _filteredTotal = _filteredExpenses.Sum(e => e.Amount);
+        
+        StateHasChanged();
+    }
+
+    private void ClearFilters()
+    {
+        _startDate = null;
+        _endDate = null;
+        _selectedCategory = null;
+        _selectedTruckId = null;
+        _selectedPaymentMethod = null;
+        _searchString = "";
+        ApplyFilters();
+    }
+
+    private async Task ExportToCSV()
+    {
+        try
+        {
+            var csv = new StringBuilder();
+            csv.AppendLine("Date,Category,Vendor,Description,Amount,Truck,Payment Method,Tax Deductible");
+            
+            foreach (var expense in _filteredExpenses)
+            {
+                csv.AppendLine($"\"{expense.ExpenseDate:MM/dd/yyyy}\",\"{expense.Category}\",\"{expense.Vendor}\",\"{expense.Description}\",{expense.Amount},\"{expense.TruckId ?? "General"}\",\"{expense.PaymentMethod}\",{expense.IsDeductible}");
+            }
+            
+            // In browser, trigger download via JS interop (TODO)
+            Snackbar.Add("CSV export prepared. Download functionality coming soon.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error exporting: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void ViewReceipt(Expense expense)
+    {
+        NavigationManager.NavigateTo($"/expenses/receipt/{expense.ExpenseId}");
+    }
+
+    private async Task DeleteExpense(Expense expense)
+    {
+        try
+        {
+            await UnitOfWork.Expenses.DeleteAsync(expense);
+            await UnitOfWork.SaveChangesAsync();
+            
+            Snackbar.Add("Expense deleted successfully", Severity.Success);
+            await LoadExpensesAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting expense: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+    }
+
+    private void UpdateTruckFilter(string? truckId)
+    {
+        _selectedTruckId = truckId;
+        ApplyFilters();
+    }
+
+    private Color GetCategoryColor(ExpenseCategory category)
+    {
+        return category switch
+        {
+            ExpenseCategory.Fuel => Color.Warning,
+            ExpenseCategory.Maintenance => Color.Info,
+            ExpenseCategory.Insurance => Color.Primary,
+            ExpenseCategory.Permits => Color.Secondary,
+            ExpenseCategory.Tolls => Color.Default,
+            ExpenseCategory.DriverPay => Color.Success,
+            ExpenseCategory.TruckPayment => Color.Error,
+            ExpenseCategory.Tires => Color.Info,
+            _ => Color.Default
+        };
+    }
+}

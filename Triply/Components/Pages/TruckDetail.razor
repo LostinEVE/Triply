@@ -1,0 +1,608 @@
+@page "/trucks/{TruckId}"
+@page "/trucks/{TruckId}/edit"
+@page "/trucks/add"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using CoreCPMReport = Triply.Core.Models.CPMReport
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@using Triply.Services
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+@inject IDialogService DialogService
+@inject CostPerMileService CostPerMileService
+
+<PageTitle>@(_isNew ? "Add Truck" : $"Truck {_truck?.TruckId}") - Triply</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_truck == null && !_isNew)
+{
+    <MudAlert Severity="Severity.Error">Truck not found</MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Class="mr-2" />
+        @if (_isNew)
+        {
+            <text>Add New Truck</text>
+        }
+        else
+        {
+            <text>@_truck.TruckId</text>
+            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(_truck.Status)" Class="ml-2">
+                @_truck.Status
+            </MudChip>
+        }
+    </MudText>
+
+    <MudTabs Elevation="3" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+        <MudTabPanel Text="Details" Icon="@Icons.Material.Filled.Info">
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_truck.TruckId" 
+                                 Label="Truck ID" 
+                                 Required="true"
+                                 Disabled="@(!_isNew)"
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudSelect @bind-Value="_truck.Status" 
+                              Label="Status" 
+                              T="TruckStatus"
+                              Variant="Variant.Outlined"
+                              Required="true">
+                        <MudSelectItem Value="@TruckStatus.Active">Active</MudSelectItem>
+                        <MudSelectItem Value="@TruckStatus.InShop">In Shop</MudSelectItem>
+                        <MudSelectItem Value="@TruckStatus.Inactive">Inactive</MudSelectItem>
+                        <MudSelectItem Value="@TruckStatus.Sold">Sold</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_truck.Make" 
+                                 Label="Make" 
+                                 Required="true"
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_truck.Model" 
+                                 Label="Model" 
+                                 Required="true"
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudNumericField @bind-Value="_truck.Year" 
+                                    Label="Year" 
+                                    Required="true"
+                                    Min="1900"
+                                    Max="@DateTime.Now.Year"
+                                    Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_truck.VIN" 
+                                 Label="VIN" 
+                                 Required="true"
+                                 MaxLength="17"
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_truck.LicensePlate" 
+                                 Label="License Plate" 
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="_truck.CurrentOdometer" 
+                                    Label="Current Odometer" 
+                                    Adornment="Adornment.End"
+                                    AdornmentText="miles"
+                                    Min="0"
+                                    Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudDatePicker @bind-Date="_truck.PurchaseDate" 
+                                  Label="Purchase Date" 
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="_truck.PurchasePrice" 
+                                    Label="Purchase Price" 
+                                    Adornment="Adornment.Start"
+                                    AdornmentText="$"
+                                    Format="N2"
+                                    Min="0"
+                                    Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_truck.Notes" 
+                                 Label="Notes" 
+                                 Lines="3"
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+            </MudGrid>
+            
+            <MudDivider Class="my-4" />
+            
+            <MudStack Row="true" Spacing="3">
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Primary" 
+                          StartIcon="@Icons.Material.Filled.Save"
+                          OnClick="SaveAsync">
+                    Save
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Default"
+                          OnClick="Cancel">
+                    Cancel
+                </MudButton>
+                @if (!_isNew)
+                {
+                    <MudSpacer />
+                    <MudButton Variant="Variant.Filled" 
+                              Color="Color.Error" 
+                              StartIcon="@Icons.Material.Filled.Delete"
+                              OnClick="DeleteAsync">
+                        Delete
+                    </MudButton>
+                }
+            </MudStack>
+        </MudTabPanel>
+
+        @if (!_isNew)
+        {
+            <MudTabPanel Text="Expenses" Icon="@Icons.Material.Filled.Receipt">
+                <MudText Typo="Typo.h6" Class="mb-3">Expenses for @_truck.TruckId</MudText>
+                
+                @if (_loadingExpenses)
+                {
+                    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+                }
+                else if (_expenses.Any())
+                {
+                    <MudDataGrid T="Expense" Items="@_expenses" Dense="true" Hover="true">
+                        <Columns>
+                            <PropertyColumn Property="x => x.ExpenseDate" Title="Date" Format="MM/dd/yyyy" />
+                            <PropertyColumn Property="x => x.Category" Title="Category" />
+                            <PropertyColumn Property="x => x.Description" Title="Description" />
+                            <PropertyColumn Property="x => x.Amount" Title="Amount" Format="C2" />
+                        </Columns>
+                    </MudDataGrid>
+                    
+                    <MudText Typo="Typo.h6" Class="mt-4">
+                        Total Expenses: @_expenses.Sum(e => e.Amount).ToString("C2")
+                    </MudText>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info">No expenses recorded for this truck</MudAlert>
+                }
+                
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Primary" 
+                          StartIcon="@Icons.Material.Filled.Add"
+                          Class="mt-4"
+                          OnClick="@(() => NavigateTo($"/expenses/add?truckId={_truck.TruckId}"))">
+                    Add Expense
+                </MudButton>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Fuel Log" Icon="@Icons.Material.Filled.LocalGasStation">
+                <MudText Typo="Typo.h6" Class="mb-3">Fuel Entries for @_truck.TruckId</MudText>
+                
+                @if (_loadingFuel)
+                {
+                    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+                }
+                else if (_fuelEntries.Any())
+                {
+                    <MudDataGrid T="FuelEntry" Items="@_fuelEntries" Dense="true" Hover="true">
+                        <Columns>
+                            <PropertyColumn Property="x => x.FuelDate" Title="Date" Format="MM/dd/yyyy" />
+                            <PropertyColumn Property="x => x.Gallons" Title="Gallons" Format="N2" />
+                            <PropertyColumn Property="x => x.PricePerGallon" Title="Price/Gal" Format="C3" />
+                            <PropertyColumn Property="x => x.TotalCost" Title="Total" Format="C2" />
+                            <PropertyColumn Property="x => x.Odometer" Title="Odometer" Format="N0" />
+                        </Columns>
+                    </MudDataGrid>
+                    
+                    <MudStack Row="true" Class="mt-4" Spacing="4">
+                        <MudText Typo="Typo.h6">
+                            Total Fuel Cost: @_fuelEntries.Sum(f => f.TotalCost).ToString("C2")
+                        </MudText>
+                        <MudText Typo="Typo.h6">
+                            Total Gallons: @_fuelEntries.Sum(f => f.Gallons).ToString("N2")
+                        </MudText>
+                    </MudStack>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info">No fuel entries recorded for this truck</MudAlert>
+                }
+                
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Primary" 
+                          StartIcon="@Icons.Material.Filled.Add"
+                          Class="mt-4"
+                          OnClick="@(() => NavigateTo($"/fuel/add?truckId={_truck.TruckId}"))">
+                    Add Fuel Entry
+                </MudButton>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Maintenance" Icon="@Icons.Material.Filled.Build">
+                <MudText Typo="Typo.h6" Class="mb-3">Maintenance Records for @_truck.TruckId</MudText>
+                
+                @if (_loadingMaintenance)
+                {
+                    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+                }
+                else if (_maintenanceRecords.Any())
+                {
+                    <MudDataGrid T="MaintenanceRecord" Items="@_maintenanceRecords" Dense="true" Hover="true">
+                        <Columns>
+                            <PropertyColumn Property="x => x.MaintenanceDate" Title="Date" Format="MM/dd/yyyy" />
+                            <PropertyColumn Property="x => x.Type" Title="Type" />
+                            <PropertyColumn Property="x => x.Description" Title="Description" />
+                            <PropertyColumn Property="x => x.TotalCost" Title="Cost" Format="C2" />
+                            <PropertyColumn Property="x => x.Odometer" Title="Odometer" Format="N0" />
+                        </Columns>
+                    </MudDataGrid>
+                    
+                    <MudText Typo="Typo.h6" Class="mt-4">
+                        Total Maintenance Cost: @_maintenanceRecords.Sum(m => m.TotalCost).ToString("C2")
+                    </MudText>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info">No maintenance records for this truck</MudAlert>
+                }
+                
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Primary" 
+                          StartIcon="@Icons.Material.Filled.Add"
+                          Class="mt-4"
+                          OnClick="@(() => NavigateTo($"/maintenance/add?truckId={_truck.TruckId}"))">
+                    Add Maintenance
+                </MudButton>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Financials" Icon="@Icons.Material.Filled.AttachMoney">
+                <MudText Typo="Typo.h6" Class="mb-3">Financial Summary for @_truck.TruckId</MudText>
+                
+                @if (_loadingCPM)
+                {
+                    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+                }
+                else if (_cpmReport != null)
+                {
+                    <MudGrid>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudCard>
+                                <MudCardContent>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Total Miles</MudText>
+                                    <MudText Typo="Typo.h5">@_cpmReport.TotalMiles.ToString("N0")</MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                        
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudCard>
+                                <MudCardContent>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Total Revenue</MudText>
+                                    <MudText Typo="Typo.h5" Color="Color.Success">@_cpmReport.TotalRevenue.ToString("C0")</MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                        
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudCard>
+                                <MudCardContent>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Total Expenses</MudText>
+                                    <MudText Typo="Typo.h5" Color="Color.Error">@_cpmReport.TotalExpenses.ToString("C0")</MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                        
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudCard>
+                                <MudCardContent>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Cost Per Mile</MudText>
+                                    <MudText Typo="Typo.h5" Color="Color.Primary">@_cpmReport.TotalCPM.ToString("C2")</MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                        
+                        <MudItem xs="12">
+                            <MudCard>
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6">Cost Breakdown</MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudSimpleTable Dense="true" Hover="true">
+                                        <thead>
+                                            <tr>
+                                                <th>Category</th>
+                                                <th class="text-right">Total Cost</th>
+                                                <th class="text-right">Cost Per Mile</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>Fuel</td>
+                                                <td class="text-right">@_cpmReport.FuelCost.ToString("C2")</td>
+                                                <td class="text-right">@_cpmReport.FuelCPM.ToString("C3")</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Maintenance</td>
+                                                <td class="text-right">@_cpmReport.MaintenanceCost.ToString("C2")</td>
+                                                <td class="text-right">@_cpmReport.MaintenanceCPM.ToString("C3")</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Other Expenses</td>
+                                                <td class="text-right">@_cpmReport.OtherExpenses.ToString("C2")</td>
+                                                <td class="text-right">@_cpmReport.OtherCPM.ToString("C3")</td>
+                                            </tr>
+                                        </tbody>
+                                    </MudSimpleTable>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    </MudGrid>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info">No financial data available for this truck</MudAlert>
+                }
+            </MudTabPanel>
+        }
+    </MudTabs>
+}
+
+@code {
+    [Parameter]
+    public string? TruckId { get; set; }
+
+    private Truck _truck = new();
+    private bool _loading = true;
+    private bool _isNew => string.IsNullOrEmpty(TruckId) || TruckId == "add";
+    
+    // Tab data
+    private List<Expense> _expenses = new();
+    private bool _loadingExpenses = false;
+    
+    private List<FuelEntry> _fuelEntries = new();
+    private bool _loadingFuel = false;
+    
+    private List<MaintenanceRecord> _maintenanceRecords = new();
+    private bool _loadingMaintenance = false;
+
+    private CoreCPMReport? _cpmReport;
+    private bool _loadingCPM = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            if (_isNew)
+            {
+                _truck = new Truck
+                {
+                    Status = TruckStatus.Active,
+                    Year = DateTime.Now.Year
+                };
+            }
+            else
+            {
+                _truck = await UnitOfWork.Trucks.GetQueryable()
+                    .FirstOrDefaultAsync(t => t.TruckId == TruckId);
+                
+                if (_truck != null)
+                {
+                    // Load related data
+                    await LoadExpensesAsync();
+                    await LoadFuelEntriesAsync();
+                    await LoadMaintenanceAsync();
+                    await LoadFinancialsAsync();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading truck: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadExpensesAsync()
+    {
+        try
+        {
+            _loadingExpenses = true;
+            _expenses = await UnitOfWork.Expenses.GetQueryable()
+                .Where(e => e.TruckId == _truck.TruckId)
+                .OrderByDescending(e => e.ExpenseDate)
+                .Take(50)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading expenses: {ex.Message}");
+        }
+        finally
+        {
+            _loadingExpenses = false;
+        }
+    }
+
+    private async Task LoadFuelEntriesAsync()
+    {
+        try
+        {
+            _loadingFuel = true;
+            _fuelEntries = await UnitOfWork.FuelEntries.GetQueryable()
+                .Where(f => f.TruckId == _truck.TruckId)
+                .OrderByDescending(f => f.FuelDate)
+                .Take(50)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading fuel entries: {ex.Message}");
+        }
+        finally
+        {
+            _loadingFuel = false;
+        }
+    }
+
+    private async Task LoadMaintenanceAsync()
+    {
+        try
+        {
+            _loadingMaintenance = true;
+            _maintenanceRecords = await UnitOfWork.MaintenanceRecords.GetQueryable()
+                .Where(m => m.TruckId == _truck.TruckId)
+                .OrderByDescending(m => m.MaintenanceDate)
+                .Take(50)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading maintenance: {ex.Message}");
+        }
+        finally
+        {
+            _loadingMaintenance = false;
+        }
+    }
+
+    private async Task LoadFinancialsAsync()
+    {
+        try
+        {
+            _loadingCPM = true;
+            var startDate = DateTime.Now.AddMonths(-12);
+            var endDate = DateTime.Now;
+            
+            _cpmReport = await CostPerMileService.CalculateCPMAsync(startDate, endDate, _truck.TruckId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading financials: {ex.Message}");
+        }
+        finally
+        {
+            _loadingCPM = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_truck.TruckId))
+            {
+                Snackbar.Add("Truck ID is required", Severity.Error);
+                return;
+            }
+            
+            if (string.IsNullOrWhiteSpace(_truck.Make) || string.IsNullOrWhiteSpace(_truck.Model))
+            {
+                Snackbar.Add("Make and Model are required", Severity.Error);
+                return;
+            }
+            
+            if (_isNew)
+            {
+                // Check if truck ID already exists
+                var exists = await UnitOfWork.Trucks.GetQueryable()
+                    .AnyAsync(t => t.TruckId == _truck.TruckId);
+                
+                if (exists)
+                {
+                    Snackbar.Add("A truck with this ID already exists", Severity.Error);
+                    return;
+                }
+                
+                await UnitOfWork.Trucks.AddAsync(_truck);
+            }
+            else
+            {
+                await UnitOfWork.Trucks.UpdateAsync(_truck);
+            }
+            
+            await UnitOfWork.SaveChangesAsync();
+            
+            Snackbar.Add($"Truck {_truck.TruckId} saved successfully", Severity.Success);
+            NavigationManager.NavigateTo("/trucks");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving truck: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        // Simple confirmation - in production, use a proper dialog
+        try
+        {
+            await UnitOfWork.Trucks.DeleteAsync(_truck);
+            await UnitOfWork.SaveChangesAsync();
+
+            Snackbar.Add($"Truck {_truck.TruckId} deleted successfully", Severity.Success);
+            NavigationManager.NavigateTo("/trucks");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting truck: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/trucks");
+    }
+
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+    }
+
+    private Color GetStatusColor(TruckStatus status)
+    {
+        return status switch
+        {
+            TruckStatus.Active => Color.Success,
+            TruckStatus.InShop => Color.Warning,
+            TruckStatus.Inactive => Color.Default,
+            TruckStatus.Sold => Color.Default,
+            _ => Color.Default
+        };
+    }
+}

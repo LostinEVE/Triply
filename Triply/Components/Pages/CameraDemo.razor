@@ -1,0 +1,232 @@
+@page "/camera-demo"
+@using MudBlazor
+@using Triply.Core.Interfaces
+@using Triply.Components.Shared
+@inject ICameraService CameraService
+@inject ISnackbar Snackbar
+
+<PageTitle>Camera Demo - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.CameraAlt" Class="mr-2" />
+    Camera & Image Demo
+</MudText>
+
+<MudGrid>
+    <!-- Receipt Capture Component Demo -->
+    <MudItem xs="12" md="6">
+        <ReceiptCapture @bind-ImageBytes="@_receiptImage"
+                       Title="Expense Receipt"
+                       Description="Capture or upload a receipt for this expense"
+                       AutoCompress="true"
+                       MaxWidth="1024"
+                       MaxHeight="1024"
+                       Quality="85" />
+    </MudItem>
+    
+    <!-- Second Receipt Example -->
+    <MudItem xs="12" md="6">
+        <ReceiptCapture @bind-ImageBytes="@_invoiceImage"
+                       Title="Invoice Document"
+                       Description="Capture or upload an invoice document"
+                       AutoCompress="true" />
+    </MudItem>
+    
+    <!-- Image Display Examples -->
+    <MudItem xs="12">
+        <MudCard Elevation="3">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Image Display Modes</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudGrid>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.subtitle1" Class="mb-2">Thumbnail Mode (80x80)</MudText>
+                        <MudStack Row="true" Spacing="2">
+                            <ImageComponent ImageBytes="@_receiptImage" 
+                                          Mode="ImageComponent.DisplayMode.Thumbnail"
+                                          ShowPlaceholder="true"
+                                          PlaceholderText="Receipt" />
+                            <ImageComponent ImageBytes="@_invoiceImage" 
+                                          Mode="ImageComponent.DisplayMode.Thumbnail"
+                                          ShowPlaceholder="true"
+                                          PlaceholderText="Invoice" />
+                            <ImageComponent ImageBytes="@null" 
+                                          Mode="ImageComponent.DisplayMode.Thumbnail"
+                                          ShowPlaceholder="true"
+                                          PlaceholderText="Empty" />
+                        </MudStack>
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudText Typo="Typo.subtitle1" Class="mb-2">Medium Mode (200x200)</MudText>
+                        <ImageComponent ImageBytes="@_receiptImage" 
+                                      Mode="ImageComponent.DisplayMode.Medium"
+                                      ShowPlaceholder="true"
+                                      PlaceholderText="No image captured"
+                                      ShowOverlay="true"
+                                      OverlayText="Receipt Image" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudText Typo="Typo.subtitle1" Class="mb-2">Full Mode (Responsive)</MudText>
+                        <ImageComponent ImageBytes="@_receiptImage" 
+                                      Mode="ImageComponent.DisplayMode.Full"
+                                      ShowPlaceholder="true"
+                                      PlaceholderText="No image to display" />
+                    </MudItem>
+                </MudGrid>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Direct Camera Actions -->
+    <MudItem xs="12">
+        <MudCard Elevation="3">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Direct Camera Actions</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudStack Row="true" Spacing="2">
+                    <MudButton Variant="Variant.Filled" 
+                              Color="Color.Primary" 
+                              StartIcon="@Icons.Material.Filled.CameraAlt"
+                              OnClick="TakePictureAsync">
+                        Take Picture
+                    </MudButton>
+                    
+                    <MudButton Variant="Variant.Outlined" 
+                              Color="Color.Primary" 
+                              StartIcon="@Icons.Material.Filled.PhotoLibrary"
+                              OnClick="PickPictureAsync">
+                        Pick from Gallery
+                    </MudButton>
+                    
+                    <MudButton Variant="Variant.Outlined" 
+                              Color="Color.Primary" 
+                              StartIcon="@Icons.Material.Filled.PhotoCamera"
+                              OnClick="CaptureOrPickAsync">
+                        Capture or Pick
+                    </MudButton>
+                </MudStack>
+                
+                @if (_directCaptureImage != null)
+                {
+                    <MudDivider Class="my-4" />
+                    <ImageComponent ImageBytes="@_directCaptureImage" 
+                                  Mode="ImageComponent.DisplayMode.Medium" />
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Permission Status -->
+    <MudItem xs="12">
+        <MudCard Elevation="3">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Permission Status</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudStack Spacing="2">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudText>Camera Permission</MudText>
+                        <MudChip T="string" 
+                                Color="@(_hasCameraPermission ? Color.Success : Color.Warning)"
+                                Size="Size.Small">
+                            @(_hasCameraPermission ? "Granted" : "Not Granted")
+                        </MudChip>
+                    </MudStack>
+                    
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudText>Storage Permission</MudText>
+                        <MudChip T="string" 
+                                Color="@(_hasStoragePermission ? Color.Success : Color.Warning)"
+                                Size="Size.Small">
+                            @(_hasStoragePermission ? "Granted" : "Not Granted")
+                        </MudChip>
+                    </MudStack>
+                    
+                    <MudButton Variant="Variant.Text" 
+                              Color="Color.Primary" 
+                              StartIcon="@Icons.Material.Filled.Refresh"
+                              OnClick="CheckPermissionsAsync">
+                        Refresh Status
+                    </MudButton>
+                </MudStack>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private byte[]? _receiptImage;
+    private byte[]? _invoiceImage;
+    private byte[]? _directCaptureImage;
+    private bool _hasCameraPermission;
+    private bool _hasStoragePermission;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckPermissionsAsync();
+    }
+
+    private async Task CheckPermissionsAsync()
+    {
+        _hasCameraPermission = await CameraService.CheckCameraPermissionAsync();
+        _hasStoragePermission = await CameraService.CheckStoragePermissionAsync();
+    }
+
+    private async Task TakePictureAsync()
+    {
+        try
+        {
+            _directCaptureImage = await CameraService.CapturePhotoAsync();
+            if (_directCaptureImage != null)
+            {
+                Snackbar.Add("Photo captured successfully", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task PickPictureAsync()
+    {
+        try
+        {
+            _directCaptureImage = await CameraService.PickPhotoAsync();
+            if (_directCaptureImage != null)
+            {
+                Snackbar.Add("Photo selected successfully", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CaptureOrPickAsync()
+    {
+        try
+        {
+            _directCaptureImage = await CameraService.CaptureOrPickPhotoAsync();
+            if (_directCaptureImage != null)
+            {
+                Snackbar.Add("Photo added successfully", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

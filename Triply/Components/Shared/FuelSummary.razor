@@ -1,0 +1,545 @@
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject IUnitOfWork UnitOfWork
+@inject ISnackbar Snackbar
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12">
+            <MudText Typo="Typo.h6" Class="mb-3">
+                <MudIcon Icon="@Icons.Material.Filled.Analytics" Class="mr-2" />
+                Fuel Analytics
+                @if (StartDate.HasValue && EndDate.HasValue)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">
+                        @StartDate.Value.ToString("MM/dd/yyyy") - @EndDate.Value.ToString("MM/dd/yyyy")
+                    </MudChip>
+                }
+            </MudText>
+        </MudItem>
+        
+        <!-- Summary Cards -->
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Total Fuel Cost</MudText>
+                            <MudText Typo="Typo.h4" Color="Color.Warning">@_totalCost.ToString("C0")</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @_fuelCount fillups
+                            </MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.LocalGasStation" Size="Size.Large" Color="Color.Warning" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Total Gallons</MudText>
+                            <MudText Typo="Typo.h4" Color="Color.Info">@_totalGallons.ToString("N0")</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                Avg: @(_fuelCount > 0 ? (_totalGallons / _fuelCount).ToString("N1") : "0") gal/fillup
+                            </MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.Opacity" Size="Size.Large" Color="Color.Info" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Avg Price/Gallon</MudText>
+                            <MudText Typo="Typo.h4" Color="Color.Primary">@_avgPPG.ToString("C3")</MudText>
+                            <MudText Typo="Typo.caption" Color="@(_avgPPGChange >= 0 ? Color.Error : Color.Success)">
+                                @(_avgPPGChange >= 0 ? "▲" : "▼") @Math.Abs(_avgPPGChange).ToString("N1")% vs last period
+                            </MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.MonetizationOn" Size="Size.Large" Color="Color.Primary" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Fleet Avg MPG</MudText>
+                            <MudText Typo="Typo.h4" Color="@GetMPGColor(_avgMPG)">@_avgMPG.ToString("N2")</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                Fuel efficiency
+                            </MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.Speed" Size="Size.Large" Color="Color.Success" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- MPG by Truck -->
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.Speed" Class="mr-2" />
+                            MPG by Truck
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_mpgByTruck.Any())
+                    {
+                        <MudSimpleTable Dense="true" Hover="true">
+                            <thead>
+                                <tr>
+                                    <th>Truck</th>
+                                    <th class="text-right">Avg MPG</th>
+                                    <th class="text-right">Miles Driven</th>
+                                    <th class="text-right">Gallons Used</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var truck in _mpgByTruck.OrderByDescending(t => t.AvgMPG))
+                                {
+                                    <tr>
+                                        <td>
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Primary">@truck.TruckId</MudChip>
+                                        </td>
+                                        <td class="text-right">
+                                            <MudChip T="string" Size="Size.Small" Color="@GetMPGColor(truck.AvgMPG)">
+                                                @truck.AvgMPG.ToString("N2")
+                                            </MudChip>
+                                        </td>
+                                        <td class="text-right">@truck.TotalMiles.ToString("N0")</td>
+                                        <td class="text-right">@truck.TotalGallons.ToString("N1")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                    else
+                    {
+                        <MudText Align="Align.Center" Class="pa-4">No MPG data available</MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Fuel Cost by State (IFTA) -->
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.Map" Class="mr-2" />
+                            Fuel Cost by State (IFTA)
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_fuelByState.Any())
+                    {
+                        <MudSimpleTable Dense="true" Hover="true" Style="max-height: 300px; overflow-y: auto;">
+                            <thead>
+                                <tr>
+                                    <th>State</th>
+                                    <th class="text-right">Gallons</th>
+                                    <th class="text-right">Cost</th>
+                                    <th class="text-right">Avg PPG</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var state in _fuelByState.OrderByDescending(s => s.TotalCost))
+                                {
+                                    <tr>
+                                        <td><strong>@state.State</strong></td>
+                                        <td class="text-right">@state.TotalGallons.ToString("N2")</td>
+                                        <td class="text-right">@state.TotalCost.ToString("C2")</td>
+                                        <td class="text-right">
+                                            <MudChip T="string" 
+                                                    Size="Size.Small" 
+                                                    Color="@GetPPGColor(state.AvgPPG, _avgPPG)">
+                                                @state.AvgPPG.ToString("C3")
+                                            </MudChip>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                    else
+                    {
+                        <MudText Align="Align.Center" Class="pa-4">No state data available</MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Fuel Cost Trend -->
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.ShowChart" Class="mr-2" />
+                            Price Per Gallon Trend
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_ppgTrendData.Any())
+                    {
+                        <MudChart ChartType="ChartType.Line" 
+                                 ChartSeries="@_ppgTrendSeries" 
+                                 XAxisLabels="@_ppgTrendLabels"
+                                 Width="100%" 
+                                 Height="300px" />
+                    }
+                    else
+                    {
+                        <MudText Align="Align.Center" Class="pa-4">No trend data available</MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Best/Worst Fuel Prices -->
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.CompareArrows" Class="mr-2" />
+                            Price Comparison
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_fuelEntries.Any())
+                    {
+                        <MudStack Spacing="3">
+                            <div>
+                                <MudText Typo="Typo.body2" Color="Color.Success">
+                                    <MudIcon Icon="@Icons.Material.Filled.ThumbUp" Size="Size.Small" /> Best Price
+                                </MudText>
+                                <MudText Typo="Typo.h6">@_bestPrice.ToString("C3")/gal</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @_bestPriceLocation
+                                </MudText>
+                            </div>
+                            
+                            <MudDivider />
+                            
+                            <div>
+                                <MudText Typo="Typo.body2" Color="Color.Error">
+                                    <MudIcon Icon="@Icons.Material.Filled.ThumbDown" Size="Size.Small" /> Worst Price
+                                </MudText>
+                                <MudText Typo="Typo.h6">@_worstPrice.ToString("C3")/gal</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @_worstPriceLocation
+                                </MudText>
+                            </div>
+                            
+                            <MudDivider />
+                            
+                            <div>
+                                <MudText Typo="Typo.body2">Potential Savings</MudText>
+                                <MudText Typo="Typo.h6" Color="Color.Success">
+                                    @_potentialSavings.ToString("C2")
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    If all fuel bought at best price
+                                </MudText>
+                            </div>
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <MudText Align="Align.Center" Class="pa-4">No price data</MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public DateTime? StartDate { get; set; }
+    
+    [Parameter]
+    public DateTime? EndDate { get; set; }
+    
+    [Parameter]
+    public string? TruckId { get; set; }
+
+    private bool _loading = true;
+    private List<Triply.Core.Models.FuelEntry> _fuelEntries = new();
+    
+    // Summary stats
+    private decimal _totalCost = 0;
+    private decimal _totalGallons = 0;
+    private int _fuelCount = 0;
+    private decimal _avgPPG = 0;
+    private decimal _avgPPGChange = 0;
+    private decimal _avgMPG = 0;
+    
+    // MPG by truck
+    private List<TruckMPGSummary> _mpgByTruck = new();
+    
+    // Fuel by state
+    private List<StateFuelSummary> _fuelByState = new();
+    
+    // Price comparison
+    private decimal _bestPrice = 0;
+    private string _bestPriceLocation = "";
+    private decimal _worstPrice = 0;
+    private string _worstPriceLocation = "";
+    private decimal _potentialSavings = 0;
+    
+    // Charts
+    private List<ChartSeries<double>> _ppgTrendSeries = new();
+    private string[] _ppgTrendLabels = Array.Empty<string>();
+    private List<PPGTrendPoint> _ppgTrendData = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadSummaryDataAsync();
+    }
+
+    private async Task LoadSummaryDataAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            // Build query
+            var query = UnitOfWork.FuelEntries.GetQueryable();
+            
+            if (StartDate.HasValue)
+            {
+                query = query.Where(f => f.FuelDate >= StartDate.Value);
+            }
+            if (EndDate.HasValue)
+            {
+                query = query.Where(f => f.FuelDate <= EndDate.Value.AddDays(1));
+            }
+            if (!string.IsNullOrEmpty(TruckId))
+            {
+                query = query.Where(f => f.TruckId == TruckId);
+            }
+            
+            _fuelEntries = await query.ToListAsync();
+            
+            // Calculate all summaries
+            CalculateTotals();
+            CalculateMPGByTruck();
+            CalculateFuelByState();
+            CalculatePriceComparison();
+            CalculatePPGTrend();
+            
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading fuel summary: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void CalculateTotals()
+    {
+        _fuelCount = _fuelEntries.Count;
+        _totalGallons = _fuelEntries.Sum(f => f.Gallons);
+        _totalCost = _fuelEntries.Sum(f => f.TotalCost);
+        _avgPPG = _fuelEntries.Any() ? _fuelEntries.Average(f => f.PricePerGallon) : 0;
+        
+        // Calculate price change vs previous period
+        if (StartDate.HasValue && EndDate.HasValue)
+        {
+            var periodDays = (EndDate.Value - StartDate.Value).Days;
+            var previousStart = StartDate.Value.AddDays(-periodDays);
+            var previousEnd = StartDate.Value.AddDays(-1);
+            
+            var previousAvg = UnitOfWork.FuelEntries.GetQueryable()
+                .Where(f => f.FuelDate >= previousStart && f.FuelDate <= previousEnd)
+                .Select(f => f.PricePerGallon)
+                .DefaultIfEmpty(0)
+                .Average();
+            
+            if (previousAvg > 0)
+            {
+                _avgPPGChange = ((_avgPPG - previousAvg) / previousAvg) * 100;
+            }
+        }
+    }
+
+    private void CalculateMPGByTruck()
+    {
+        _mpgByTruck.Clear();
+        _avgMPG = 0;
+        
+        var byTruck = _fuelEntries.GroupBy(f => f.TruckId);
+        
+        foreach (var group in byTruck)
+        {
+            var entries = group.OrderBy(f => f.Odometer).ToList();
+            
+            if (entries.Count < 2) continue;
+            
+            var firstOdometer = entries.First().Odometer;
+            var lastOdometer = entries.Last().Odometer;
+            var totalMiles = lastOdometer - firstOdometer;
+            var totalGallons = entries.Sum(f => f.Gallons);
+            
+            if (totalGallons > 0 && totalMiles > 0)
+            {
+                var avgMPG = totalMiles / totalGallons;
+                
+                _mpgByTruck.Add(new TruckMPGSummary
+                {
+                    TruckId = group.Key,
+                    AvgMPG = avgMPG,
+                    TotalMiles = totalMiles,
+                    TotalGallons = totalGallons
+                });
+            }
+        }
+        
+        if (_mpgByTruck.Any())
+        {
+            _avgMPG = _mpgByTruck.Average(t => t.AvgMPG);
+        }
+    }
+
+    private void CalculateFuelByState()
+    {
+        _fuelByState = _fuelEntries
+            .Where(f => !string.IsNullOrEmpty(f.State))
+            .GroupBy(f => f.State)
+            .Select(g => new StateFuelSummary
+            {
+                State = g.Key!,
+                TotalGallons = g.Sum(f => f.Gallons),
+                TotalCost = g.Sum(f => f.TotalCost),
+                AvgPPG = g.Average(f => f.PricePerGallon),
+                EntryCount = g.Count()
+            })
+            .OrderByDescending(s => s.TotalCost)
+            .ToList();
+    }
+
+    private void CalculatePriceComparison()
+    {
+        if (!_fuelEntries.Any()) return;
+        
+        var bestEntry = _fuelEntries.OrderBy(f => f.PricePerGallon).First();
+        _bestPrice = bestEntry.PricePerGallon;
+        _bestPriceLocation = $"{bestEntry.City}, {bestEntry.State}";
+        
+        var worstEntry = _fuelEntries.OrderByDescending(f => f.PricePerGallon).First();
+        _worstPrice = worstEntry.PricePerGallon;
+        _worstPriceLocation = $"{worstEntry.City}, {worstEntry.State}";
+        
+        // Calculate potential savings
+        _potentialSavings = _totalGallons * (_avgPPG - _bestPrice);
+    }
+
+    private void CalculatePPGTrend()
+    {
+        if (!_fuelEntries.Any()) return;
+        
+        // Group by week
+        var weeklyData = _fuelEntries
+            .GroupBy(f => new { Year = f.FuelDate.Year, Week = GetWeekOfYear(f.FuelDate) })
+            .OrderBy(g => g.Key.Year)
+            .ThenBy(g => g.Key.Week)
+            .Select(g => new
+            {
+                g.Key.Year,
+                g.Key.Week,
+                AvgPPG = g.Average(f => f.PricePerGallon),
+                Date = g.Min(f => f.FuelDate)
+            })
+            .ToList();
+        
+        var ppgData = weeklyData.Select(w => (double)w.AvgPPG).ToList();
+        var labels = weeklyData.Select(w => w.Date.ToString("MM/dd")).ToList();
+        
+        _ppgTrendSeries = new List<ChartSeries<double>>
+        {
+            new ChartSeries<double> { Name = "Price Per Gallon", Data = ppgData.ToArray() }
+        };
+        _ppgTrendLabels = labels.ToArray();
+    }
+
+    private int GetWeekOfYear(DateTime date)
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        return culture.Calendar.GetWeekOfYear(date, 
+            System.Globalization.CalendarWeekRule.FirstDay, 
+            DayOfWeek.Sunday);
+    }
+
+    private Color GetMPGColor(decimal mpg)
+    {
+        if (mpg >= 7.0m) return Color.Success;
+        if (mpg >= 6.0m) return Color.Info;
+        if (mpg >= 5.0m) return Color.Warning;
+        return Color.Error;
+    }
+
+    private Color GetPPGColor(decimal ppg, decimal avgPPG)
+    {
+        if (ppg <= avgPPG * 0.95m) return Color.Success;  // 5% below average
+        if (ppg <= avgPPG) return Color.Info;
+        if (ppg <= avgPPG * 1.05m) return Color.Warning;  // 5% above average
+        return Color.Error;
+    }
+
+    // DTOs
+    private class TruckMPGSummary
+    {
+        public string TruckId { get; set; } = "";
+        public decimal AvgMPG { get; set; }
+        public int TotalMiles { get; set; }
+        public decimal TotalGallons { get; set; }
+    }
+
+    private class StateFuelSummary
+    {
+        public string State { get; set; } = "";
+        public decimal TotalGallons { get; set; }
+        public decimal TotalCost { get; set; }
+        public decimal AvgPPG { get; set; }
+        public int EntryCount { get; set; }
+    }
+
+    private class PPGTrendPoint
+    {
+        public DateTime Date { get; set; }
+        public decimal AvgPPG { get; set; }
+    }
+}

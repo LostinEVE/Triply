@@ -1,0 +1,46 @@
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.hover-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.15) !important;
+}
+
+.border-error {
+    border: 2px solid var(--mud-palette-error);
+}
+
+/* Chart container */
+::deep .mud-chart {
+    margin: 0 auto;
+}
+
+/* Activity list scrollbar */
+.mud-card-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.mud-card-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.mud-card-content::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.2);
+    border-radius: 3px;
+}
+
+.mud-card-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(0,0,0,0.3);
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .mud-grid-item {
+        padding: 8px !important;
+    }
+}

@@ -1,0 +1,575 @@
+@page "/invoices/create"
+@page "/invoices/edit/{InvoiceId:guid}"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@using Triply.Components.Shared
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+@inject IDialogService DialogService
+
+<PageTitle>@(_isNew ? "Create Invoice" : "Edit Invoice") - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Description" Class="mr-2" />
+    @(_isNew ? "Create Invoice" : "Edit Invoice")
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudForm @ref="_form" @bind-IsValid="@_formValid">
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudSelect @bind-Value="_invoice.CustomerId" 
+                                          Label="Customer" 
+                                          T="Guid"
+                                          Variant="Variant.Outlined"
+                                          Required="true"
+                                          Disabled="@(!_isNew)">
+                                    @foreach (var customer in _customers)
+                                    {
+                                        <MudSelectItem Value="@customer.CustomerId">
+                                            @customer.CompanyName
+                                        </MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField Value="@_invoice.InvoiceNumber" 
+                                             Label="Invoice Number" 
+                                             Variant="Variant.Outlined"
+                                             Disabled="true"
+                                             HelperText="Auto-generated" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudDatePicker Date="@_invoiceDate"
+                                              DateChanged="@((DateTime? date) => _invoiceDate = date ?? DateTime.Now)"
+                                              Label="Invoice Date" 
+                                              Required="true"
+                                              Variant="Variant.Outlined" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudDatePicker Date="@_dueDate"
+                                              DateChanged="@((DateTime? date) => _dueDate = date ?? DateTime.Now)"
+                                              Label="Due Date" 
+                                              Required="true"
+                                              Variant="Variant.Outlined" />
+                            </MudItem>
+                            
+                            <!-- Line Items Section -->
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.h6" Class="mt-3 mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.List" Class="mr-2" />
+                                    Line Items
+                                </MudText>
+                                
+                                <MudStack Row="true" Spacing="2" Class="mb-3">
+                                    <MudButton Variant="Variant.Filled" 
+                                              Color="Color.Primary" 
+                                              StartIcon="@Icons.Material.Filled.LocalShipping"
+                                              OnClick="OpenLoadSelectorAsync"
+                                              Disabled="@(_invoice.CustomerId == Guid.Empty)">
+                                        Add from Loads
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Outlined" 
+                                              Color="Color.Default" 
+                                              StartIcon="@Icons.Material.Filled.Add"
+                                              OnClick="AddManualLineItem">
+                                        Add Line Item
+                                    </MudButton>
+                                </MudStack>
+                                
+                                @if (_invoice.LineItems.Any())
+                                {
+                                    <MudPaper Elevation="2" Class="pa-3">
+                                        @foreach (var lineItem in _invoice.LineItems.ToList())
+                                        {
+                                            <MudPaper Elevation="1" Class="pa-3 mb-2">
+                                                <MudGrid>
+                                                    <MudItem xs="12" md="5">
+                                                        <MudTextField @bind-Value="lineItem.Description" 
+                                                                     Label="Description" 
+                                                                     Variant="Variant.Text"
+                                                                     Lines="2" />
+                                                    </MudItem>
+                                                    <MudItem xs="4" md="2">
+                                                        <MudNumericField Value="@lineItem.Quantity"
+                                                                        ValueChanged="@((decimal val) => { lineItem.Quantity = val; CalculateLineTotal(lineItem); })"
+                                                                        Label="Qty" 
+                                                                        Format="N2"
+                                                                        Variant="Variant.Text" />
+                                                    </MudItem>
+                                                    <MudItem xs="4" md="2">
+                                                        <MudNumericField Value="@lineItem.UnitPrice"
+                                                                        ValueChanged="@((decimal val) => { lineItem.UnitPrice = val; CalculateLineTotal(lineItem); })"
+                                                                        Label="Unit Price" 
+                                                                        Format="C2"
+                                                                        Variant="Variant.Text" />
+                                                    </MudItem>
+                                                    <MudItem xs="3" md="2">
+                                                        <MudText Typo="Typo.body2" Class="mt-4">
+                                                            <strong>@lineItem.LineTotal.ToString("C2")</strong>
+                                                        </MudText>
+                                                    </MudItem>
+                                                    <MudItem xs="1" md="1">
+                                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                                                      Size="Size.Small" 
+                                                                      Color="Color.Error"
+                                                                      OnClick="@(() => RemoveLineItem(lineItem))" />
+                                                    </MudItem>
+                                                </MudGrid>
+                                            </MudPaper>
+                                        }
+                                    </MudPaper>
+                                }
+                                else
+                                {
+                                    <MudAlert Severity="Severity.Info">
+                                        No line items added yet. Click "Add from Loads" or "Add Line Item" to get started.
+                                    </MudAlert>
+                                }
+                            </MudItem>
+                            
+                            <!-- Totals Section -->
+                            <MudItem xs="12">
+                                <MudPaper Elevation="2" Class="pa-4 mt-3">
+                                    <MudGrid>
+                                        <MudItem xs="12" Class="text-right">
+                                            <MudText Typo="Typo.body1">
+                                                Subtotal: <strong>@_invoice.Subtotal.ToString("C2")</strong>
+                                            </MudText>
+                                        </MudItem>
+                                        <MudItem xs="12" Class="text-right">
+                                            <MudStack Row="true" Justify="Justify.FlexEnd" AlignItems="AlignItems.Center" Spacing="2">
+                                                <MudText Typo="Typo.body1">Tax:</MudText>
+                                                <MudNumericField Value="@_taxRate"
+                                                                ValueChanged="@((decimal val) => { _taxRate = val; CalculateTotals(); })"
+                                                                Adornment="Adornment.End"
+                                                                AdornmentText="%"
+                                                                Format="N2"
+                                                                Min="0"
+                                                                Max="100"
+                                                                Style="width: 120px;"
+                                                                Variant="Variant.Outlined" />
+                                                <strong>@_invoice.TaxAmount.ToString("C2")</strong>
+                                            </MudStack>
+                                        </MudItem>
+                                        <MudItem xs="12" Class="text-right">
+                                            <MudText Typo="Typo.h5" Color="Color.Primary">
+                                                Total: <strong>@_invoice.TotalAmount.ToString("C2")</strong>
+                                            </MudText>
+                                        </MudItem>
+                                    </MudGrid>
+                                </MudPaper>
+                            </MudItem>
+                            
+                            <!-- Notes/Terms -->
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_invoice.Notes" 
+                                             Label="Notes / Terms" 
+                                             Lines="4"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudForm>
+                </MudCardContent>
+                
+                <MudCardActions>
+                    <MudStack Row="true" Spacing="3" Class="pa-4">
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Primary" 
+                                  StartIcon="@Icons.Material.Filled.Visibility"
+                                  OnClick="PreviewPDF"
+                                  Disabled="@(!_invoice.LineItems.Any())">
+                            Preview
+                        </MudButton>
+                        
+                        <MudSpacer />
+                        
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Default"
+                                  OnClick="Cancel">
+                            Cancel
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Default" 
+                                  StartIcon="@Icons.Material.Filled.Save"
+                                  Disabled="@(!_formValid || !_invoice.LineItems.Any())"
+                                  OnClick="@(() => SaveAsync(false))">
+                            Save as Draft
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Success" 
+                                  StartIcon="@Icons.Material.Filled.Send"
+                                  Disabled="@(!_formValid || !_invoice.LineItems.Any())"
+                                  OnClick="@(() => SaveAsync(true))">
+                            Save & Send
+                        </MudButton>
+                    </MudStack>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Invoice Preview Sidebar -->
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Invoice Preview</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">INVOICE</MudText>
+                        <MudText Typo="Typo.h6">@_invoice.InvoiceNumber</MudText>
+                        
+                        <MudDivider />
+                        
+                        <div>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">BILL TO</MudText>
+                            <MudText Typo="Typo.body1">
+                                @(_selectedCustomer?.CompanyName ?? "Select customer")
+                            </MudText>
+                        </div>
+                        
+                        <MudDivider />
+                        
+                        <div>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">DATE</MudText>
+                            <MudText Typo="Typo.body2">@_invoice.InvoiceDate.ToString("MM/dd/yyyy")</MudText>
+                        </div>
+                        
+                        <div>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">DUE DATE</MudText>
+                            <MudText Typo="Typo.body2">@_invoice.DueDate.ToString("MM/dd/yyyy")</MudText>
+                        </div>
+                        
+                        <MudDivider />
+                        
+                        <div>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">LINE ITEMS</MudText>
+                            <MudText Typo="Typo.body2">@_invoice.LineItems.Count items</MudText>
+                        </div>
+                        
+                        <MudDivider />
+                        
+                        <MudStack Spacing="1">
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2">Subtotal:</MudText>
+                                <MudText Typo="Typo.body2">@_invoice.Subtotal.ToString("C2")</MudText>
+                            </MudStack>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2">Tax (@_taxRate%):</MudText>
+                                <MudText Typo="Typo.body2">@_invoice.TaxAmount.ToString("C2")</MudText>
+                            </MudStack>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.h6">Total:</MudText>
+                                <MudText Typo="Typo.h6" Color="Color.Primary">@_invoice.TotalAmount.ToString("C2")</MudText>
+                            </MudStack>
+                        </MudStack>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public Guid? InvoiceId { get; set; }
+
+    private Invoice _invoice = new();
+    private DateTime? _invoiceDate;
+    private DateTime? _dueDate;
+    private decimal _taxRate = 0;
+    private MudForm _form = null!;
+    private bool _formValid = false;
+    private bool _loading = false;
+    private bool _isNew => !InvoiceId.HasValue;
+    
+    private List<Customer> _customers = new();
+    private Customer? _selectedCustomer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomersAsync();
+        
+        if (!_isNew && InvoiceId.HasValue)
+        {
+            await LoadInvoiceAsync();
+        }
+        else
+        {
+            _invoice = new Invoice
+            {
+                InvoiceNumber = "Loading...",
+                InvoiceDate = DateTime.Now,
+                DueDate = DateTime.Now.AddDays(30),
+                Status = InvoiceStatus.Draft,
+                LineItems = new List<InvoiceLineItem>()
+            };
+            _invoiceDate = DateTime.Now;
+            _dueDate = DateTime.Now.AddDays(30);
+            
+            // Generate invoice number
+            _invoice.InvoiceNumber = await GenerateInvoiceNumberAsync();
+        }
+    }
+
+    private async Task LoadCustomersAsync()
+    {
+        try
+        {
+            _customers = await UnitOfWork.Customers.GetQueryable()
+                .OrderBy(c => c.CompanyName)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading customers: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadInvoiceAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            var invoice = await UnitOfWork.Invoices.GetQueryable()
+                .Include(i => i.Customer)
+                .Include(i => i.LineItems)
+                    .ThenInclude(li => li.Load)
+                .FirstOrDefaultAsync(i => i.InvoiceId == InvoiceId);
+            
+            if (invoice != null)
+            {
+                _invoice = invoice;
+                _invoiceDate = invoice.InvoiceDate;
+                _dueDate = invoice.DueDate;
+                _selectedCustomer = invoice.Customer;
+                
+                // Calculate tax rate from existing amounts
+                if (_invoice.Subtotal > 0)
+                {
+                    _taxRate = (_invoice.TaxAmount / _invoice.Subtotal) * 100;
+                }
+            }
+            else
+            {
+                Snackbar.Add("Invoice not found", Severity.Error);
+                NavigationManager.NavigateTo("/invoices");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading invoice: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task<string> GenerateInvoiceNumberAsync()
+    {
+        try
+        {
+            var lastInvoice = await UnitOfWork.Invoices.GetQueryable()
+                .OrderByDescending(i => i.InvoiceDate)
+                .FirstOrDefaultAsync();
+            
+            if (lastInvoice != null && !string.IsNullOrEmpty(lastInvoice.InvoiceNumber))
+            {
+                // Extract number and increment
+                var numberPart = new string(lastInvoice.InvoiceNumber.Where(char.IsDigit).ToArray());
+                if (int.TryParse(numberPart, out int lastNumber))
+                {
+                    return $"INV-{(lastNumber + 1):D6}";
+                }
+            }
+            
+            return $"INV-{DateTime.Now.Year}{DateTime.Now.Month:D2}001";
+        }
+        catch
+        {
+            return $"INV-{DateTime.Now.Year}{DateTime.Now.Month:D2}001";
+        }
+    }
+
+    private async Task OpenLoadSelectorAsync()
+    {
+        if (_invoice.CustomerId == Guid.Empty)
+        {
+            Snackbar.Add("Please select a customer first", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters();
+        parameters.Add("CustomerId", _invoice.CustomerId);
+        parameters.Add("OnLoadsSelected", EventCallback.Factory.Create<List<Load>>(this, AddLoadsToInvoice));
+
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Large, 
+            FullWidth = true,
+            CloseButton = true
+        };
+
+        await DialogService.ShowAsync<LoadSelectorDialog>("Select Loads to Invoice", parameters, options);
+    }
+
+    private void AddLoadsToInvoice(List<Load> loads)
+    {
+        foreach (var load in loads)
+        {
+            // Check if load already added
+            if (_invoice.LineItems.Any(li => li.LoadId == load.LoadId))
+                continue;
+            
+            var lineItem = new InvoiceLineItem
+            {
+                LoadId = load.LoadId,
+                Description = $"Load {load.LoadNumber}: {load.PickupCity}, {load.PickupState} → {load.DeliveryCity}, {load.DeliveryState}",
+                Quantity = load.Miles,
+                UnitPrice = load.Rate,
+                LineTotal = load.TotalAmount
+            };
+            
+            _invoice.LineItems.Add(lineItem);
+        }
+        
+        CalculateTotals();
+        Snackbar.Add($"{loads.Count} load(s) added to invoice", Severity.Success);
+    }
+
+    private void AddManualLineItem()
+    {
+        var lineItem = new InvoiceLineItem
+        {
+            Description = "",
+            Quantity = 1,
+            UnitPrice = 0,
+            LineTotal = 0
+        };
+        
+        _invoice.LineItems.Add(lineItem);
+        StateHasChanged();
+    }
+
+    private void RemoveLineItem(InvoiceLineItem lineItem)
+    {
+        _invoice.LineItems.Remove(lineItem);
+        CalculateTotals();
+    }
+
+    private void CalculateLineTotal(InvoiceLineItem lineItem)
+    {
+        lineItem.LineTotal = lineItem.Quantity * lineItem.UnitPrice;
+        CalculateTotals();
+    }
+
+    private void CalculateTotals()
+    {
+        _invoice.Subtotal = _invoice.LineItems.Sum(li => li.LineTotal);
+        _invoice.TaxAmount = _invoice.Subtotal * (_taxRate / 100);
+        _invoice.TotalAmount = _invoice.Subtotal + _invoice.TaxAmount;
+        _invoice.Balance = _invoice.TotalAmount - _invoice.AmountPaid;
+        StateHasChanged();
+    }
+
+    private void PreviewPDF()
+    {
+        // TODO: Implement PDF preview
+        Snackbar.Add("PDF preview coming soon", Severity.Info);
+    }
+
+    private async Task SaveAsync(bool andSend)
+    {
+        try
+        {
+            await _form.Validate();
+            
+            if (!_formValid)
+            {
+                Snackbar.Add("Please fix validation errors", Severity.Error);
+                return;
+            }
+            
+            if (!_invoice.LineItems.Any())
+            {
+                Snackbar.Add("Please add at least one line item", Severity.Error);
+                return;
+            }
+            
+            // Set dates
+            if (_invoiceDate.HasValue)
+            {
+                _invoice.InvoiceDate = _invoiceDate.Value;
+            }
+            if (_dueDate.HasValue)
+            {
+                _invoice.DueDate = _dueDate.Value;
+            }
+            
+            // Calculate final totals
+            CalculateTotals();
+            
+            if (_isNew)
+            {
+                await UnitOfWork.Invoices.AddAsync(_invoice);
+                
+                // Update loads to Invoiced status
+                foreach (var lineItem in _invoice.LineItems.Where(li => li.LoadId.HasValue))
+                {
+                    var load = await UnitOfWork.Loads.GetByIdAsync(lineItem.LoadId.Value);
+                    if (load != null && load.Status == LoadStatus.Delivered)
+                    {
+                        load.Status = LoadStatus.Invoiced;
+                        await UnitOfWork.Loads.UpdateAsync(load);
+                    }
+                }
+            }
+            else
+            {
+                await UnitOfWork.Invoices.UpdateAsync(_invoice);
+            }
+            
+            await UnitOfWork.SaveChangesAsync();
+            
+            if (andSend)
+            {
+                // Navigate to detail page with send action
+                NavigationManager.NavigateTo($"/invoices/{_invoice.InvoiceId}?action=send");
+            }
+            else
+            {
+                Snackbar.Add($"Invoice {(_isNew ? "created" : "updated")} successfully", Severity.Success);
+                NavigationManager.NavigateTo("/invoices");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving invoice: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/invoices");
+    }
+}

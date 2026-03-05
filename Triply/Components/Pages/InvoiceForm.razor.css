@@ -1,0 +1,48 @@
+/* Line item editor */
+::deep .line-item-row {
+    background-color: rgba(0,0,0,0.02);
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+::deep .mud-theme-dark .line-item-row {
+    background-color: rgba(255,255,255,0.05);
+}
+
+/* Totals section */
+::deep .totals-section {
+    background-color: rgba(25, 118, 210, 0.08);
+    border-left: 4px solid var(--mud-palette-primary);
+}
+
+/* Preview sidebar */
+::deep .invoice-preview {
+    position: sticky;
+    top: 20px;
+}
+
+/* Line item controls */
+::deep .line-item-controls .mud-input {
+    font-size: 0.875rem;
+}
+
+/* Add buttons */
+::deep .add-line-buttons .mud-button {
+    margin-right: 8px;
+}
+
+.text-right {
+    text-align: right !important;
+}
+
+/* Tax rate input */
+::deep .tax-rate-input {
+    max-width: 120px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 960px) {
+    ::deep .invoice-preview {
+        position: static;
+    }
+}

@@ -1,0 +1,270 @@
+@page "/add-fuel-entry"
+@using Triply.Core.Interfaces
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@inject IGeolocationService GeolocationService
+@inject IUnitOfWork UnitOfWork
+
+<h3>Record Fuel Purchase</h3>
+
+<div class="container">
+    @if (locationInfo != null)
+    {
+        <div class="alert alert-success">
+            <strong>📍 Location:</strong> @locationInfo.City, @locationInfo.State
+            <br />
+            <small>Source: @locationInfo.Source | Accuracy: @(locationInfo.Accuracy?.ToString("N0") ?? "N/A")m</small>
+        </div>
+    }
+    else if (permissionDenied)
+    {
+        <div class="alert alert-warning">
+            <strong>⚠️ Location Permission Denied</strong>
+            <p>Please enable location permissions in your device settings or enter location manually.</p>
+        </div>
+    }
+
+    <div class="form-group">
+        <label>Truck</label>
+        <select @bind="selectedTruckId" class="form-control">
+            <option value="">Select Truck...</option>
+            @foreach (var truck in trucks)
+            {
+                <option value="@truck.TruckId">@truck.TruckId - @truck.Make @truck.Model</option>
+            }
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>Gallons</label>
+        <input type="number" @bind="gallons" class="form-control" step="0.1" />
+    </div>
+
+    <div class="form-group">
+        <label>Price Per Gallon</label>
+        <input type="number" @bind="pricePerGallon" class="form-control" step="0.01" />
+    </div>
+
+    <div class="form-group">
+        <label>Fuel Type</label>
+        <select @bind="fuelType" class="form-control">
+            <option value="@FuelType.Diesel">Diesel</option>
+            <option value="@FuelType.DEF">DEF</option>
+        </select>
+    </div>
+
+    @if (locationInfo == null || manualEntryMode)
+    {
+        <div class="card mt-3 mb-3">
+            <div class="card-header">Manual Location Entry</div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>Zip Code (for lookup)</label>
+                    <input type="text" @bind="zipCode" class="form-control" maxlength="5" />
+                    <button class="btn btn-secondary btn-sm mt-2" @onclick="LookupZipCode">Lookup City/State</button>
+                </div>
+
+                <div class="form-group">
+                    <label>City</label>
+                    <input type="text" @bind="manualCity" class="form-control" />
+                </div>
+
+                <div class="form-group">
+                    <label>State</label>
+                    <input type="text" @bind="manualState" class="form-control" maxlength="2" />
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="button-group">
+        <button class="btn btn-primary" @onclick="SaveFuelEntry" disabled="@saving">
+            @(saving ? "Saving..." : "Save Fuel Entry")
+        </button>
+        <button class="btn btn-secondary" @onclick="RefreshLocation" disabled="@refreshing">
+            @(refreshing ? "Refreshing..." : "🔄 Refresh Location")
+        </button>
+        <button class="btn btn-outline-secondary" @onclick="ToggleManualEntry">
+            @(manualEntryMode ? "Use GPS" : "Manual Entry")
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert alert-info mt-3">@message</div>
+    }
+</div>
+
+@code {
+    private List<Truck> trucks = new();
+    private string selectedTruckId = string.Empty;
+    private decimal gallons;
+    private decimal pricePerGallon;
+    private FuelType fuelType = FuelType.Diesel;
+    private LocationInfo? locationInfo;
+    private bool permissionDenied;
+    private bool saving;
+    private bool refreshing;
+    private bool manualEntryMode;
+    private string zipCode = string.Empty;
+    private string manualCity = string.Empty;
+    private string manualState = string.Empty;
+    private string message = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        trucks = (await UnitOfWork.Trucks.GetAllAsync()).ToList();
+        
+        // Try to get current location
+        await LoadLocationAsync();
+    }
+
+    private async Task LoadLocationAsync()
+    {
+        // Check permissions first
+        var hasPermission = await GeolocationService.CheckAndRequestPermissionsAsync();
+        
+        if (!hasPermission)
+        {
+            permissionDenied = true;
+            // Try to use cached location
+            locationInfo = GeolocationService.GetCachedLocation();
+            return;
+        }
+
+        permissionDenied = false;
+        locationInfo = await GeolocationService.GetCurrentLocationAsync();
+    }
+
+    private async Task RefreshLocation()
+    {
+        refreshing = true;
+        message = string.Empty;
+
+        try
+        {
+            GeolocationService.ClearCache();
+            await LoadLocationAsync();
+
+            if (locationInfo != null)
+            {
+                message = $"Location refreshed: {locationInfo.City}, {locationInfo.State}";
+            }
+            else
+            {
+                message = "Unable to get location. Please enable location services or enter manually.";
+            }
+        }
+        finally
+        {
+            refreshing = false;
+        }
+    }
+
+    private async Task LookupZipCode()
+    {
+        if (string.IsNullOrWhiteSpace(zipCode))
+            return;
+
+        var zipLocation = await GeolocationService.GetLocationFromZipCodeAsync(zipCode);
+        
+        if (zipLocation != null)
+        {
+            manualCity = zipLocation.City ?? string.Empty;
+            manualState = zipLocation.State ?? string.Empty;
+            locationInfo = zipLocation;
+            message = $"Found: {zipLocation.City}, {zipLocation.State}";
+        }
+        else
+        {
+            message = "Zip code not found in database.";
+        }
+    }
+
+    private void ToggleManualEntry()
+    {
+        manualEntryMode = !manualEntryMode;
+        
+        if (manualEntryMode && locationInfo != null)
+        {
+            manualCity = locationInfo.City ?? string.Empty;
+            manualState = locationInfo.State ?? string.Empty;
+            zipCode = locationInfo.PostalCode ?? string.Empty;
+        }
+    }
+
+    private async Task SaveFuelEntry()
+    {
+        if (string.IsNullOrEmpty(selectedTruckId))
+        {
+            message = "Please select a truck.";
+            return;
+        }
+
+        if (gallons <= 0 || pricePerGallon <= 0)
+        {
+            message = "Please enter valid gallons and price.";
+            return;
+        }
+
+        saving = true;
+        message = string.Empty;
+
+        try
+        {
+            var truck = await UnitOfWork.Trucks.GetByIdAsync(selectedTruckId);
+            if (truck == null)
+            {
+                message = "Selected truck not found.";
+                return;
+            }
+
+            // Use manual entry if in manual mode
+            LocationInfo? finalLocation = locationInfo;
+            if (manualEntryMode)
+            {
+                finalLocation = new LocationInfo
+                {
+                    City = manualCity,
+                    State = manualState,
+                    PostalCode = zipCode,
+                    Source = LocationSource.Manual,
+                    Timestamp = DateTime.UtcNow
+                };
+            }
+
+            var fuelEntry = new FuelEntry
+            {
+                FuelEntryId = Guid.NewGuid(),
+                TruckId = selectedTruckId,
+                FuelDate = DateTime.UtcNow,
+                Odometer = truck.CurrentOdometer,
+                Gallons = gallons,
+                PricePerGallon = pricePerGallon,
+                TotalCost = gallons * pricePerGallon,
+                FuelType = fuelType,
+                City = finalLocation?.City,
+                State = finalLocation?.State,
+                Latitude = finalLocation?.Latitude,
+                Longitude = finalLocation?.Longitude
+            };
+
+            await UnitOfWork.FuelEntries.AddAsync(fuelEntry);
+            await UnitOfWork.SaveChangesAsync();
+
+            message = $"✅ Fuel entry saved! Total: {fuelEntry.TotalCost:C}";
+            
+            // Reset form
+            gallons = 0;
+            pricePerGallon = 0;
+        }
+        catch (Exception ex)
+        {
+            message = $"❌ Error: {ex.Message}";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

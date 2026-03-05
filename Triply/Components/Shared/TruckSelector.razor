@@ -1,0 +1,83 @@
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject IUnitOfWork UnitOfWork
+@inject ISnackbar Snackbar
+
+<MudSelect @bind-Value="SelectedTruckId" 
+          Label="@Label" 
+          T="string"
+          Variant="@Variant"
+          Required="@Required"
+          Disabled="@Disabled"
+          Clearable="@Clearable">
+    @if (ShowAllOption)
+    {
+        <MudSelectItem T="string" Value="@((string?)null)">All Trucks</MudSelectItem>
+    }
+    @foreach (var truck in _trucks)
+    {
+        <MudSelectItem T="string" Value="@truck.TruckId">
+            @truck.TruckId - @truck.Make @truck.Model (@truck.Status)
+        </MudSelectItem>
+    }
+</MudSelect>
+
+@code {
+    [Parameter]
+    public string? SelectedTruckId { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> SelectedTruckIdChanged { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = "Select Truck";
+
+    [Parameter]
+    public bool Required { get; set; } = false;
+
+    [Parameter]
+    public bool Disabled { get; set; } = false;
+
+    [Parameter]
+    public bool Clearable { get; set; } = true;
+
+    [Parameter]
+    public bool ShowAllOption { get; set; } = false;
+
+    [Parameter]
+    public Variant Variant { get; set; } = Variant.Outlined;
+
+    [Parameter]
+    public TruckStatus? FilterStatus { get; set; }
+
+    private List<Truck> _trucks = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTrucksAsync();
+    }
+
+    private async Task LoadTrucksAsync()
+    {
+        try
+        {
+            var query = UnitOfWork.Trucks.GetQueryable();
+
+            if (FilterStatus.HasValue)
+            {
+                query = query.Where(t => t.Status == FilterStatus.Value);
+            }
+
+            _trucks = await query
+                .OrderBy(t => t.TruckId)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading trucks: {ex.Message}", Severity.Error);
+        }
+    }
+}

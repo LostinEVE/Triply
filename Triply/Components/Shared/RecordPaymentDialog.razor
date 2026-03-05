@@ -1,0 +1,218 @@
+@namespace Triply.Components.Shared
+@using MudBlazor
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@using Triply.Components.Shared
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Payment" Class="mr-2" />
+            Record Payment
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_formValid">
+            <MudStack Spacing="3">
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    Invoice Balance: <strong>@Invoice.Balance.ToString("C2")</strong>
+                </MudAlert>
+
+                <MudDatePicker @bind-Date="_paymentDate" 
+                              Label="Payment Date" 
+                              Required="true"
+                              Variant="Variant.Outlined" />
+
+                <MudNumericField @bind-Value="_paymentAmount" 
+                                Label="Payment Amount" 
+                                Required="true"
+                                Adornment="Adornment.Start"
+                                AdornmentText="$"
+                                Format="N2"
+                                Min="0"
+                                Variant="Variant.Outlined"
+                                HelperText="@GetPaymentHelper()" />
+                
+                <MudSelect @bind-Value="_paymentMethod" 
+                          Label="Payment Method" 
+                          T="string"
+                          Variant="Variant.Outlined"
+                          Required="true">
+                    <MudSelectItem Value="@("Check")">Check</MudSelectItem>
+                    <MudSelectItem Value="@("ACH/Bank Transfer")">ACH/Bank Transfer</MudSelectItem>
+                    <MudSelectItem Value="@("Credit Card")">Credit Card</MudSelectItem>
+                    <MudSelectItem Value="@("Cash")">Cash</MudSelectItem>
+                    <MudSelectItem Value="@("Wire Transfer")">Wire Transfer</MudSelectItem>
+                    <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+                </MudSelect>
+                
+                @if (_paymentMethod == "Check")
+                {
+                    <MudTextField @bind-Value="_checkNumber" 
+                                 Label="Check Number" 
+                                 Variant="Variant.Outlined" />
+                }
+                
+                <MudTextField @bind-Value="_paymentNotes" 
+                             Label="Notes" 
+                             Lines="3"
+                             Variant="Variant.Outlined" />
+                
+                @if (_paymentAmount == Invoice.Balance)
+                {
+                    <MudAlert Severity="Severity.Success" Dense="true">
+                        This payment will mark the invoice as <strong>Paid</strong>.
+                    </MudAlert>
+                }
+                else if (_paymentAmount > 0 && _paymentAmount < Invoice.Balance)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">
+                        Partial payment. Remaining balance: <strong>@((Invoice.Balance - _paymentAmount).ToString("C2"))</strong>
+                    </MudAlert>
+                }
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" 
+                  Color="Color.Primary" 
+                  StartIcon="@Icons.Material.Filled.Save"
+                  Disabled="@(!_formValid)"
+                  OnClick="SavePaymentAsync">
+            Record Payment
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter]
+    public Invoice Invoice { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback OnPaymentRecorded { get; set; }
+
+    private MudForm _form = null!;
+    private bool _formValid = false;
+    private bool _paymentSaved = false;
+
+    private DateTime? _paymentDate;
+    private decimal _paymentAmount;
+    private string _paymentMethod = "Check";
+    private string _checkNumber = "";
+    private string _paymentNotes = "";
+
+    protected override void OnInitialized()
+    {
+        _paymentDate = DateTime.Now;
+        _paymentAmount = Invoice.Balance;
+    }
+
+    private string GetPaymentHelper()
+    {
+        if (_paymentAmount == Invoice.Balance)
+        {
+            return "Full payment - will mark as Paid";
+        }
+        else if (_paymentAmount > 0 && _paymentAmount < Invoice.Balance)
+        {
+            return $"Partial payment - ${(Invoice.Balance - _paymentAmount):N2} remaining";
+        }
+        return "Enter payment amount";
+    }
+
+    private async Task SavePaymentAsync()
+    {
+        try
+        {
+            await _form.Validate();
+            
+            if (!_formValid)
+            {
+                Snackbar.Add("Please fix validation errors", Severity.Error);
+                return;
+            }
+            
+            if (_paymentAmount <= 0)
+            {
+                Snackbar.Add("Payment amount must be greater than 0", Severity.Error);
+                return;
+            }
+            
+            if (_paymentAmount > Invoice.Balance)
+            {
+                Snackbar.Add("Payment amount cannot exceed invoice balance", Severity.Error);
+                return;
+            }
+            
+            // Update invoice
+            Invoice.AmountPaid += _paymentAmount;
+            Invoice.Balance = Invoice.TotalAmount - Invoice.AmountPaid;
+            
+            // Update status
+            if (Invoice.Balance == 0)
+            {
+                Invoice.Status = InvoiceStatus.Paid;
+                Invoice.PaidDate = _paymentDate;
+            }
+            else
+            {
+                Invoice.Status = InvoiceStatus.PartiallyPaid;
+            }
+            
+            // Save notes about payment
+            var paymentNote = $"Payment recorded: {_paymentAmount:C2} via {_paymentMethod}";
+            if (!string.IsNullOrEmpty(_checkNumber))
+            {
+                paymentNote += $" (Check #{_checkNumber})";
+            }
+            if (!string.IsNullOrEmpty(_paymentNotes))
+            {
+                paymentNote += $"\nNotes: {_paymentNotes}";
+            }
+            
+            Invoice.Notes = string.IsNullOrEmpty(Invoice.Notes) 
+                ? paymentNote 
+                : Invoice.Notes + "\n\n" + paymentNote;
+            
+            await UnitOfWork.Invoices.UpdateAsync(Invoice);
+            
+            // Update load statuses to Paid if invoice is fully paid
+            if (Invoice.Status == InvoiceStatus.Paid)
+            {
+                foreach (var lineItem in Invoice.LineItems.Where(li => li.LoadId.HasValue))
+                {
+                    var load = await UnitOfWork.Loads.GetByIdAsync(lineItem.LoadId.Value);
+                    if (load != null && load.Status == LoadStatus.Invoiced)
+                    {
+                        load.Status = LoadStatus.Paid;
+                        await UnitOfWork.Loads.UpdateAsync(load);
+                    }
+                }
+            }
+            
+            await UnitOfWork.SaveChangesAsync();
+            
+            Snackbar.Add($"Payment of {_paymentAmount:C2} recorded successfully", 
+                Severity.Success,
+                config => { config.Icon = Icons.Material.Filled.CheckCircle; });
+
+            if (OnPaymentRecorded.HasDelegate)
+            {
+                await OnPaymentRecorded.InvokeAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error recording payment: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel()
+    {
+        // Dialog will close automatically
+    }
+}

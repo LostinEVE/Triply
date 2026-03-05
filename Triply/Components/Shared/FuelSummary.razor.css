@@ -1,0 +1,48 @@
+.text-right {
+    text-align: right !important;
+}
+
+/* Summary cards animation */
+::deep .mud-card:hover {
+    transform: translateY(-2px);
+    transition: transform 0.2s ease;
+}
+
+/* MPG indicators with gradients */
+::deep .mud-chip.mpg-indicator {
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* State table scrollable */
+::deep .mud-simple-table {
+    overflow-x: auto;
+}
+
+/* Chart styling */
+::deep .mud-chart {
+    margin: 0 auto;
+}
+
+/* Price comparison cards */
+::deep .mud-stack > div {
+    padding: 12px;
+    border-radius: 4px;
+    background-color: rgba(0,0,0,0.02);
+}
+
+::deep .mud-theme-dark .mud-stack > div {
+    background-color: rgba(255,255,255,0.05);
+}
+
+/* Responsive table */
+@media (max-width: 960px) {
+    ::deep .mud-simple-table {
+        font-size: 0.875rem;
+    }
+    
+    ::deep .mud-simple-table th,
+    ::deep .mud-simple-table td {
+        padding: 8px 4px !important;
+    }
+}

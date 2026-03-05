@@ -1,0 +1,402 @@
+@page "/maintenance"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+
+<PageTitle>Maintenance - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Build" Class="mr-2" />
+    Maintenance Records
+</MudText>
+
+<!-- Upcoming Maintenance Alert -->
+@if (_upcomingMaintenance.Any())
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4" Elevation="3">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+            <div>
+                <MudText Typo="Typo.h6">
+                    <MudIcon Icon="@Icons.Material.Filled.Warning" Class="mr-2" />
+                    @_overdueMaintenance.Count Overdue, @(_upcomingMaintenance.Count - _overdueMaintenance.Count) Due Soon
+                </MudText>
+            </div>
+            <MudButton Variant="Variant.Outlined" 
+                      Color="Color.Default" 
+                      OnClick="@(() => _showSchedule = !_showSchedule)">
+                @(_showSchedule ? "Hide" : "Show") Schedule
+            </MudButton>
+        </MudStack>
+    </MudAlert>
+}
+
+@if (_showSchedule)
+{
+    <MaintenanceSchedule Trucks="@_trucks" 
+                        MaintenanceRecords="@_maintenanceRecords"
+                        OnCreateMaintenance="@HandleCreateMaintenance" />
+}
+
+<!-- Filters -->
+<MudCard Elevation="3" Class="mb-3">
+    <MudCardContent>
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudSelect @bind-Value="_selectedTruckId" 
+                      Label="Truck" 
+                      T="string"
+                      Variant="Variant.Outlined"
+                      Clearable="true"
+                      Style="min-width: 200px;">
+                <MudSelectItem T="string" Value="@("")">All Trucks</MudSelectItem>
+                @foreach (var truck in _trucks)
+                {
+                    <MudSelectItem T="string" Value="@truck.TruckId">@truck.TruckId</MudSelectItem>
+                }
+            </MudSelect>
+            
+            <MudSelect @bind-Value="_selectedMaintenanceType" 
+                      Label="Type" 
+                      T="MaintenanceType?"
+                      Variant="Variant.Outlined"
+                      Clearable="true"
+                      Style="min-width: 200px;">
+                <MudSelectItem T="MaintenanceType?" Value="@((MaintenanceType?)null)">All Types</MudSelectItem>
+                @foreach (MaintenanceType type in Enum.GetValues(typeof(MaintenanceType)))
+                {
+                    <MudSelectItem T="MaintenanceType?" Value="@type">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <MudIcon Icon="@GetMaintenanceIcon(type)" Size="Size.Small" />
+                            <span>@type.ToString()</span>
+                        </MudStack>
+                    </MudSelectItem>
+                }
+            </MudSelect>
+            
+            <MudDatePicker @bind-Date="_startDate" 
+                          Label="Start Date" 
+                          Variant="Variant.Outlined"
+                          Clearable="true" />
+            
+            <MudDatePicker @bind-Date="_endDate" 
+                          Label="End Date" 
+                          Variant="Variant.Outlined"
+                          Clearable="true" />
+            
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      OnClick="LoadMaintenanceRecordsAsync">
+                Apply Filters
+            </MudButton>
+            
+            <MudSpacer />
+            
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Success" 
+                      StartIcon="@Icons.Material.Filled.Add"
+                      OnClick="@(() => NavigateTo("/maintenance/add"))">
+                Add Maintenance Record
+            </MudButton>
+        </MudStack>
+    </MudCardContent>
+</MudCard>
+
+<!-- Maintenance Records Grid -->
+<MudCard Elevation="3">
+    <MudCardContent>
+        <MudDataGrid T="MaintenanceRecord" 
+                     Items="@_filteredRecords" 
+                     Dense="true"
+                     Hover="true"
+                     Striped="true"
+                     RowsPerPage="25"
+                     SortMode="SortMode.Multiple"
+                     RowStyleFunc="@RowStyleFunc">
+            <Columns>
+                <PropertyColumn Property="x => x.MaintenanceDate" 
+                               Title="Date" 
+                               Format="MM/dd/yyyy" />
+                
+                <PropertyColumn Property="x => x.Truck.TruckId" Title="Truck" />
+                
+                <TemplateColumn Title="Type" Sortable="true" SortBy="@(x => x.Type)">
+                    <CellTemplate>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <MudIcon Icon="@GetMaintenanceIcon(context.Item.Type)" 
+                                    Size="Size.Small" 
+                                    Color="@GetMaintenanceColor(context.Item.Type)" />
+                            <MudText Typo="Typo.body2">@context.Item.Type.ToString()</MudText>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <PropertyColumn Property="x => x.Description" Title="Description">
+                    <CellTemplate>
+                        <MudText Typo="Typo.body2" Style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">
+                            @context.Item.Description
+                        </MudText>
+                    </CellTemplate>
+                </PropertyColumn>
+                
+                <PropertyColumn Property="x => x.Odometer" Title="Odometer" Format="N0" />
+                
+                <PropertyColumn Property="x => x.Vendor" Title="Vendor" />
+                
+                <TemplateColumn Title="Total Cost" Sortable="true" SortBy="@(x => x.TotalCost)">
+                    <CellTemplate>
+                        @if (context.Item.IsWarranty)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success">Warranty</MudChip>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2">
+                                <strong>@context.Item.TotalCost.ToString("C2")</strong>
+                            </MudText>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <TemplateColumn Title="Next Due">
+                    <CellTemplate>
+                        @if (context.Item.NextDueDate.HasValue || context.Item.NextDueOdometer.HasValue)
+                        {
+                            var isOverdue = IsMaintenanceOverdue(context.Item);
+                            <MudStack Spacing="0">
+                                @if (context.Item.NextDueDate.HasValue)
+                                {
+                                    <MudText Typo="Typo.caption" 
+                                            Color="@(isOverdue ? Color.Error : Color.Default)">
+                                        @context.Item.NextDueDate.Value.ToString("MM/dd/yyyy")
+                                    </MudText>
+                                }
+                                @if (context.Item.NextDueOdometer.HasValue)
+                                {
+                                    <MudText Typo="Typo.caption" 
+                                            Color="@(isOverdue ? Color.Error : Color.Default)">
+                                        @context.Item.NextDueOdometer.Value.ToString("N0") mi
+                                    </MudText>
+                                }
+                            </MudStack>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">-</MudText>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <TemplateColumn Title="Actions" Sortable="false">
+                    <CellTemplate>
+                        <MudStack Row="true" Spacing="1">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                          Size="Size.Small" 
+                                          Color="Color.Primary"
+                                          OnClick="@(() => NavigateTo($"/maintenance/edit/{context.Item.MaintenanceId}"))"/>
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                          Size="Size.Small" 
+                                          Color="Color.Error"
+                                          OnClick="@(() => DeleteMaintenanceAsync(context.Item))"/>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            
+            <PagerContent>
+                <MudDataGridPager T="MaintenanceRecord" />
+            </PagerContent>
+        </MudDataGrid>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private List<MaintenanceRecord> _maintenanceRecords = new();
+    private List<MaintenanceRecord> _filteredRecords = new();
+    private List<MaintenanceRecord> _upcomingMaintenance = new();
+    private List<MaintenanceRecord> _overdueMaintenance = new();
+    private List<Truck> _trucks = new();
+    private bool _loading = true;
+    private bool _showSchedule = false;
+    
+    // Filters
+    private string _selectedTruckId = "";
+    private MaintenanceType? _selectedMaintenanceType;
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTrucksAsync();
+        await LoadMaintenanceRecordsAsync();
+        CalculateUpcomingMaintenance();
+    }
+
+    private async Task LoadTrucksAsync()
+    {
+        try
+        {
+            _trucks = await UnitOfWork.Trucks.GetQueryable()
+                .OrderBy(t => t.TruckId)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading trucks: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadMaintenanceRecordsAsync()
+    {
+        try
+        {
+            _loading = true;
+
+            IQueryable<MaintenanceRecord> query = UnitOfWork.MaintenanceRecords.GetQueryable()
+                .Include(m => m.Truck);
+
+            // Apply filters
+            if (!string.IsNullOrEmpty(_selectedTruckId))
+            {
+                query = query.Where(m => m.TruckId == _selectedTruckId);
+            }
+
+            if (_selectedMaintenanceType.HasValue)
+            {
+                query = query.Where(m => m.Type == _selectedMaintenanceType.Value);
+            }
+
+            if (_startDate.HasValue)
+            {
+                query = query.Where(m => m.MaintenanceDate >= _startDate.Value);
+            }
+
+            if (_endDate.HasValue)
+            {
+                query = query.Where(m => m.MaintenanceDate <= _endDate.Value.AddDays(1));
+            }
+
+            _maintenanceRecords = await query
+                .OrderByDescending(m => m.MaintenanceDate)
+                .ToListAsync();
+            
+            _filteredRecords = _maintenanceRecords;
+            
+            CalculateUpcomingMaintenance();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading maintenance records: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void CalculateUpcomingMaintenance()
+    {
+        var today = DateTime.Now.Date;
+        var thirtyDaysOut = today.AddDays(30);
+        
+        _upcomingMaintenance = _maintenanceRecords
+            .Where(m => m.NextDueDate.HasValue || m.NextDueOdometer.HasValue)
+            .Where(m => 
+                (m.NextDueDate.HasValue && m.NextDueDate.Value <= thirtyDaysOut) ||
+                (m.NextDueOdometer.HasValue && m.Truck != null && 
+                 m.NextDueOdometer.Value <= m.Truck.CurrentOdometer + 1000))
+            .OrderBy(m => m.NextDueDate)
+            .ToList();
+        
+        _overdueMaintenance = _upcomingMaintenance
+            .Where(m => IsMaintenanceOverdue(m))
+            .ToList();
+    }
+
+    private bool IsMaintenanceOverdue(MaintenanceRecord record)
+    {
+        var today = DateTime.Now.Date;
+        
+        if (record.NextDueDate.HasValue && record.NextDueDate.Value < today)
+        {
+            return true;
+        }
+        
+        if (record.NextDueOdometer.HasValue && record.Truck != null && 
+            record.Truck.CurrentOdometer >= record.NextDueOdometer.Value)
+        {
+            return true;
+        }
+        
+        return false;
+    }
+
+    private string RowStyleFunc(MaintenanceRecord record, int index)
+    {
+        if (IsMaintenanceOverdue(record))
+        {
+            return "background-color: rgba(244, 67, 54, 0.1);"; // Red tint
+        }
+        return "";
+    }
+
+    private string GetMaintenanceIcon(MaintenanceType type)
+    {
+        return type switch
+        {
+            MaintenanceType.OilChange => Icons.Material.Filled.WaterDrop,
+            MaintenanceType.Tires => Icons.Material.Filled.Circle,
+            MaintenanceType.Brakes => Icons.Material.Filled.StopCircle,
+            MaintenanceType.Transmission => Icons.Material.Filled.Settings,
+            MaintenanceType.Engine => Icons.Material.Filled.Engineering,
+            MaintenanceType.Electrical => Icons.Material.Filled.Bolt,
+            MaintenanceType.HVAC => Icons.Material.Filled.Thermostat,
+            MaintenanceType.DOTInspection => Icons.Material.Filled.VerifiedUser,
+            MaintenanceType.AnnualInspection => Icons.Material.Filled.CheckCircle,
+            MaintenanceType.PreventiveMaintenance => Icons.Material.Filled.Schedule,
+            MaintenanceType.Repair => Icons.Material.Filled.Build,
+            _ => Icons.Material.Filled.Handyman
+        };
+    }
+
+    private Color GetMaintenanceColor(MaintenanceType type)
+    {
+        return type switch
+        {
+            MaintenanceType.DOTInspection or MaintenanceType.AnnualInspection => Color.Warning,
+            MaintenanceType.Repair => Color.Error,
+            MaintenanceType.OilChange or MaintenanceType.PreventiveMaintenance => Color.Success,
+            _ => Color.Primary
+        };
+    }
+
+    private async Task DeleteMaintenanceAsync(MaintenanceRecord record)
+    {
+        try
+        {
+            await UnitOfWork.MaintenanceRecords.DeleteAsync(record);
+            await UnitOfWork.SaveChangesAsync();
+            
+            Snackbar.Add("Maintenance record deleted successfully", Severity.Success);
+            await LoadMaintenanceRecordsAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting maintenance record: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void HandleCreateMaintenance(MaintenanceRecord record)
+    {
+        // Navigate to form with pre-filled data
+        NavigationManager.NavigateTo($"/maintenance/add?truckId={record.TruckId}&type={record.Type}");
+    }
+
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+    }
+}

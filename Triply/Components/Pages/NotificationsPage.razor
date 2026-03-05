@@ -1,0 +1,274 @@
+@page "/notifications"
+@using MudBlazor
+@using Triply.Core.Interfaces
+@using Triply.Core.Models
+@implements IDisposable
+@inject INotificationService NotificationService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Notifications - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Notifications" Class="mr-2" />
+    Notifications
+</MudText>
+
+<MudGrid>
+    <!-- Summary Cards -->
+    @if (_summary != null)
+    {
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Filled.Error" Color="Color.Error" Size="Size.Large" />
+                            <MudText Typo="Typo.h3" Color="Color.Error">@_summary.CriticalCount</MudText>
+                        </MudStack>
+                        <MudText Typo="Typo.subtitle1">Critical</MudText>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Size="Size.Large" />
+                            <MudText Typo="Typo.h3" Color="Color.Warning">@_summary.WarningCount</MudText>
+                        </MudStack>
+                        <MudText Typo="Typo.subtitle1">Warnings</MudText>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Filled.Receipt" Color="Color.Primary" Size="Size.Large" />
+                            <MudText Typo="Typo.h3">@(_summary.InvoicesOverdue + _summary.InvoicesDueSoon)</MudText>
+                        </MudStack>
+                        <MudText Typo="Typo.subtitle1">Invoices</MudText>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Filled.Build" Color="Color.Secondary" Size="Size.Large" />
+                            <MudText Typo="Typo.h3">@(_summary.MaintenanceDue + _summary.MaintenanceOverdue)</MudText>
+                        </MudStack>
+                        <MudText Typo="Typo.subtitle1">Maintenance</MudText>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    }
+    
+    <!-- Filter Chips -->
+    <MudItem xs="12">
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                    <MudChip T="string" 
+                            Color="@(_filterType == null ? Color.Primary : Color.Default)"
+                            OnClick="@(() => SetFilter(null))">
+                        All (@_allNotifications.Count)
+                    </MudChip>
+                    <MudChip T="string" 
+                            Color="@(_filterType == NotificationType.InvoiceOverdue ? Color.Primary : Color.Default)"
+                            OnClick="@(() => SetFilter(NotificationType.InvoiceOverdue))">
+                        Overdue Invoices (@_summary?.InvoicesOverdue ?? 0)
+                    </MudChip>
+                    <MudChip T="string" 
+                            Color="@(_filterType == NotificationType.MaintenanceOverdue ? Color.Primary : Color.Default)"
+                            OnClick="@(() => SetFilter(NotificationType.MaintenanceOverdue))">
+                        Overdue Maintenance (@_summary?.MaintenanceOverdue ?? 0)
+                    </MudChip>
+                    <MudChip T="string" 
+                            Color="@(_filterType == NotificationType.TaxPaymentDue ? Color.Primary : Color.Default)"
+                            OnClick="@(() => SetFilter(NotificationType.TaxPaymentDue))">
+                        Tax Payments (@_summary?.TaxPaymentsDue ?? 0)
+                    </MudChip>
+                    <MudChip T="string" 
+                            Color="@(_filterType == NotificationType.IFTAFilingDue ? Color.Primary : Color.Default)"
+                            OnClick="@(() => SetFilter(NotificationType.IFTAFilingDue))">
+                        IFTA Filings (@_summary?.IFTAFilingsDue ?? 0)
+                    </MudChip>
+                    
+                    <MudSpacer />
+                    
+                    @if (_filteredNotifications.Any())
+                    {
+                        <MudButton Size="Size.Small" 
+                                  Variant="Variant.Outlined" 
+                                  OnClick="MarkAllAsReadAsync">
+                            Mark All Read
+                        </MudButton>
+                    }
+                </MudStack>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Notifications List -->
+    <MudItem xs="12">
+        <MudCard Elevation="3">
+            <MudCardContent>
+                @if (_loading)
+                {
+                    <MudProgressLinear Indeterminate="true" />
+                }
+                else if (!_filteredNotifications.Any())
+                {
+                    <MudAlert Severity="Severity.Success">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" />
+                            <MudText>No notifications to display</MudText>
+                        </MudStack>
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudList Dense="true" T="string">
+                        @foreach (var notification in _filteredNotifications)
+                        {
+                            <MudListItem OnClick="@(() => HandleNotificationClickAsync(notification))"
+                                        Style="@(notification.IsRead ? "opacity: 0.6;" : "cursor: pointer;")">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                                    <MudIcon Icon="@GetNotificationIcon(notification.Type)" 
+                                            Color="@GetNotificationColor(notification.Severity)"
+                                            Size="Size.Large" />
+                                    <div style="flex-grow: 1;">
+                                        <MudStack Spacing="1">
+                                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                                <MudText Typo="Typo.subtitle1">@notification.Title</MudText>
+                                                @if (!notification.IsRead)
+                                                {
+                                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary">New</MudChip>
+                                                }
+                                            </MudStack>
+                                            <MudText Typo="Typo.body2">@notification.Message</MudText>
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                                @notification.CreatedAt.ToString("MMM dd, yyyy h:mm tt")
+                                            </MudText>
+                                        </MudStack>
+                                    </div>
+                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowForward" 
+                                                  Color="Color.Default" 
+                                                  Size="Size.Small" />
+                                </MudStack>
+                            </MudListItem>
+                            <MudDivider />
+                        }
+                    </MudList>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private bool _loading = true;
+    private List<NotificationItem> _allNotifications = new();
+    private List<NotificationItem> _filteredNotifications = new();
+    private NotificationSummary? _summary;
+    private NotificationType? _filterType;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadNotificationsAsync();
+        NotificationService.NotificationsUpdated += OnNotificationsUpdated;
+    }
+
+    private async Task LoadNotificationsAsync()
+    {
+        _loading = true;
+        try
+        {
+            _allNotifications = await NotificationService.GetAllNotificationsAsync();
+            _summary = await NotificationService.GetNotificationSummaryAsync();
+            ApplyFilter();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void SetFilter(NotificationType? type)
+    {
+        _filterType = type;
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        _filteredNotifications = _filterType.HasValue
+            ? _allNotifications.Where(n => n.Type == _filterType.Value).ToList()
+            : _allNotifications;
+    }
+
+    private void OnNotificationsUpdated(object? sender, NotificationSummary summary)
+    {
+        InvokeAsync(async () =>
+        {
+            await LoadNotificationsAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task HandleNotificationClickAsync(NotificationItem notification)
+    {
+        await NotificationService.MarkAsReadAsync(notification.Id);
+        
+        if (!string.IsNullOrEmpty(notification.ActionUrl))
+        {
+            NavigationManager.NavigateTo(notification.ActionUrl);
+        }
+    }
+
+    private async Task MarkAllAsReadAsync()
+    {
+        await NotificationService.MarkAllAsReadAsync();
+        await LoadNotificationsAsync();
+    }
+
+    private string GetNotificationIcon(NotificationType type)
+    {
+        return type switch
+        {
+            NotificationType.InvoiceOverdue or NotificationType.InvoiceDueSoon => Icons.Material.Filled.Receipt,
+            NotificationType.MaintenanceDue or NotificationType.MaintenanceOverdue => Icons.Material.Filled.Build,
+            NotificationType.DocumentExpiring or NotificationType.DocumentExpired => Icons.Material.Filled.Description,
+            NotificationType.TaxPaymentDue => Icons.Material.Filled.AccountBalance,
+            NotificationType.IFTAFilingDue => Icons.Material.Filled.Assignment,
+            _ => Icons.Material.Filled.Info
+        };
+    }
+
+    private Color GetNotificationColor(NotificationSeverity severity)
+    {
+        return severity switch
+        {
+            NotificationSeverity.Error => Color.Error,
+            NotificationSeverity.Warning => Color.Warning,
+            NotificationSeverity.Success => Color.Success,
+            _ => Color.Info
+        };
+    }
+
+    public void Dispose()
+    {
+        NotificationService.NotificationsUpdated -= OnNotificationsUpdated;
+    }
+}

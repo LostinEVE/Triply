@@ -1,0 +1,565 @@
+@page "/maintenance/summary"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject IUnitOfWork UnitOfWork
+@inject ISnackbar Snackbar
+
+<PageTitle>Maintenance Summary - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Assessment" Class="mr-2" />
+    Maintenance Summary & Analytics
+</MudText>
+
+<!-- Date Range Filter -->
+<MudCard Elevation="3" Class="mb-3">
+    <MudCardContent>
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center">
+            <MudDatePicker @bind-Date="_startDate" 
+                          Label="Start Date" 
+                          Variant="Variant.Outlined" />
+            
+            <MudDatePicker @bind-Date="_endDate" 
+                          Label="End Date" 
+                          Variant="Variant.Outlined" />
+            
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      OnClick="LoadDataAsync">
+                Apply Filter
+            </MudButton>
+            
+            <MudSpacer />
+            
+            <MudButtonGroup Variant="Variant.Outlined">
+                <MudButton OnClick="@(() => SetDateRange(30))">Last 30 Days</MudButton>
+                <MudButton OnClick="@(() => SetDateRange(90))">Last 90 Days</MudButton>
+                <MudButton OnClick="@(() => SetDateRange(365))">Last Year</MudButton>
+            </MudButtonGroup>
+        </MudStack>
+    </MudCardContent>
+</MudCard>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <!-- Summary Cards -->
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <div>
+                            <MudText Typo="Typo.caption">Total Maintenance Events</MudText>
+                            <MudText Typo="Typo.h4">@_totalEvents</MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.Build" Size="Size.Large" Color="Color.Primary" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <div>
+                            <MudText Typo="Typo.caption">Total Cost</MudText>
+                            <MudText Typo="Typo.h4" Color="Color.Error">@_totalCost.ToString("C0")</MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Size="Size.Large" Color="Color.Error" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <div>
+                            <MudText Typo="Typo.caption">Average Cost/Event</MudText>
+                            <MudText Typo="Typo.h4">@_avgCostPerEvent.ToString("C0")</MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.Calculate" Size="Size.Large" Color="Color.Info" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <div>
+                            <MudText Typo="Typo.caption">Warranty Work</MudText>
+                            <MudText Typo="Typo.h4" Color="Color.Success">@_warrantyEvents</MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" Size="Size.Large" Color="Color.Success" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+    
+    <!-- Cost by Truck -->
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Class="mr-2" />
+                            Maintenance Cost by Truck
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_costByTruck.Any())
+                    {
+                        <MudTable Items="@_costByTruck" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Truck</MudTh>
+                                <MudTh>Events</MudTh>
+                                <MudTh Style="text-align: right;">Total Cost</MudTh>
+                                <MudTh Style="text-align: right;">Avg Cost</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Truck">@context.TruckId</MudTd>
+                                <MudTd DataLabel="Events">@context.Count</MudTd>
+                                <MudTd DataLabel="Total Cost" Style="text-align: right;">
+                                    <strong>@context.TotalCost.ToString("C0")</strong>
+                                </MudTd>
+                                <MudTd DataLabel="Avg Cost" Style="text-align: right;">
+                                    @context.AvgCost.ToString("C0")
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info">No maintenance records in selected period</MudAlert>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Cost by Maintenance Type -->
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.Category" Class="mr-2" />
+                            Cost by Maintenance Type
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_costByType.Any())
+                    {
+                        <MudTable Items="@_costByType" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Type</MudTh>
+                                <MudTh>Events</MudTh>
+                                <MudTh Style="text-align: right;">Total Cost</MudTh>
+                                <MudTh Style="text-align: right;">% of Total</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Type">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudIcon Icon="@GetMaintenanceIcon(context.Type)" 
+                                                Size="Size.Small" 
+                                                Color="@GetMaintenanceColor(context.Type)" />
+                                        <span>@context.Type.ToString()</span>
+                                    </MudStack>
+                                </MudTd>
+                                <MudTd DataLabel="Events">@context.Count</MudTd>
+                                <MudTd DataLabel="Total Cost" Style="text-align: right;">
+                                    <strong>@context.TotalCost.ToString("C0")</strong>
+                                </MudTd>
+                                <MudTd DataLabel="% of Total" Style="text-align: right;">
+                                    @context.Percentage.ToString("N1")%
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info">No maintenance records in selected period</MudAlert>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Maintenance Frequency -->
+        <MudItem xs="12">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.Timeline" Class="mr-2" />
+                            Maintenance Frequency Analysis
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_frequencyByTruckAndType.Any())
+                    {
+                        <MudTable Items="@_frequencyByTruckAndType" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Truck</MudTh>
+                                <MudTh>Type</MudTh>
+                                <MudTh>Count</MudTh>
+                                <MudTh Style="text-align: right;">Avg Days Between</MudTh>
+                                <MudTh Style="text-align: right;">Avg Miles Between</MudTh>
+                                <MudTh Style="text-align: right;">Last Service</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Truck">@context.TruckId</MudTd>
+                                <MudTd DataLabel="Type">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudIcon Icon="@GetMaintenanceIcon(context.Type)" Size="Size.Small" />
+                                        <span>@context.Type.ToString()</span>
+                                    </MudStack>
+                                </MudTd>
+                                <MudTd DataLabel="Count">@context.Count</MudTd>
+                                <MudTd DataLabel="Avg Days Between" Style="text-align: right;">
+                                    @(context.AvgDaysBetween.HasValue ? context.AvgDaysBetween.Value.ToString("N0") + " days" : "-")
+                                </MudTd>
+                                <MudTd DataLabel="Avg Miles Between" Style="text-align: right;">
+                                    @(context.AvgMilesBetween.HasValue ? context.AvgMilesBetween.Value.ToString("N0") + " mi" : "-")
+                                </MudTd>
+                                <MudTd DataLabel="Last Service" Style="text-align: right;">
+                                    @context.LastServiceDate.ToString("MM/dd/yyyy")
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info">Not enough data for frequency analysis</MudAlert>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Top Vendors -->
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.Store" Class="mr-2" />
+                            Top Vendors
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_topVendors.Any())
+                    {
+                        <MudTable Items="@_topVendors" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Vendor</MudTh>
+                                <MudTh>Services</MudTh>
+                                <MudTh Style="text-align: right;">Total Spent</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Vendor">@context.Vendor</MudTd>
+                                <MudTd DataLabel="Services">@context.Count</MudTd>
+                                <MudTd DataLabel="Total Spent" Style="text-align: right;">
+                                    <strong>@context.TotalCost.ToString("C0")</strong>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info">No vendor data available</MudAlert>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Cost Breakdown -->
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.PieChart" Class="mr-2" />
+                            Cost Breakdown
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="3">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body1">Labor Costs:</MudText>
+                            <MudText Typo="Typo.body1">
+                                <strong>@_totalLaborCost.ToString("C0")</strong>
+                                <MudText Typo="Typo.caption" Inline="true" Class="ml-2">
+                                    (@(_totalCost > 0 ? ((_totalLaborCost / _totalCost) * 100).ToString("N1") : "0")%)
+                                </MudText>
+                            </MudText>
+                        </MudStack>
+                        
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body1">Parts Costs:</MudText>
+                            <MudText Typo="Typo.body1">
+                                <strong>@_totalPartsCost.ToString("C0")</strong>
+                                <MudText Typo="Typo.caption" Inline="true" Class="ml-2">
+                                    (@(_totalCost > 0 ? ((_totalPartsCost / _totalCost) * 100).ToString("N1") : "0")%)
+                                </MudText>
+                            </MudText>
+                        </MudStack>
+                        
+                        <MudDivider />
+                        
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.h6">Total Costs:</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Primary">
+                                @_totalCost.ToString("C0")
+                            </MudText>
+                        </MudStack>
+                        
+                        <MudAlert Severity="Severity.Success" Dense="true">
+                            Warranty work saved: @_warrantySavings.ToString("C0")
+                        </MudAlert>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+    private bool _loading = true;
+    
+    // Summary stats
+    private int _totalEvents;
+    private decimal _totalCost;
+    private decimal _avgCostPerEvent;
+    private int _warrantyEvents;
+    private decimal _totalLaborCost;
+    private decimal _totalPartsCost;
+    private decimal _warrantySavings;
+    
+    // Analytics data
+    private List<TruckMaintenanceSummary> _costByTruck = new();
+    private List<TypeMaintenanceSummary> _costByType = new();
+    private List<MaintenanceFrequency> _frequencyByTruckAndType = new();
+    private List<VendorSummary> _topVendors = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        SetDateRange(90); // Default to last 90 days
+        await LoadDataAsync();
+    }
+
+    private void SetDateRange(int days)
+    {
+        _endDate = DateTime.Today;
+        _startDate = _endDate.Value.AddDays(-days);
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _loading = true;
+
+            IQueryable<MaintenanceRecord> query = UnitOfWork.MaintenanceRecords.GetQueryable()
+                .Include(m => m.Truck);
+
+            if (_startDate.HasValue)
+            {
+                query = query.Where(m => m.MaintenanceDate >= _startDate.Value);
+            }
+
+            if (_endDate.HasValue)
+            {
+                query = query.Where(m => m.MaintenanceDate <= _endDate.Value.AddDays(1));
+            }
+
+            var records = await query.ToListAsync();
+            
+            CalculateSummaryStats(records);
+            CalculateCostByTruck(records);
+            CalculateCostByType(records);
+            CalculateFrequencyAnalysis(records);
+            CalculateTopVendors(records);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading maintenance data: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void CalculateSummaryStats(List<MaintenanceRecord> records)
+    {
+        _totalEvents = records.Count;
+        _totalCost = records.Sum(r => r.TotalCost);
+        _avgCostPerEvent = _totalEvents > 0 ? _totalCost / _totalEvents : 0;
+        _warrantyEvents = records.Count(r => r.IsWarranty);
+        _totalLaborCost = records.Sum(r => r.LaborCost);
+        _totalPartsCost = records.Sum(r => r.PartsCost);
+        _warrantySavings = records.Where(r => r.IsWarranty).Sum(r => r.LaborCost + r.PartsCost);
+    }
+
+    private void CalculateCostByTruck(List<MaintenanceRecord> records)
+    {
+        _costByTruck = records
+            .GroupBy(r => r.TruckId)
+            .Select(g => new TruckMaintenanceSummary
+            {
+                TruckId = g.Key,
+                Count = g.Count(),
+                TotalCost = g.Sum(r => r.TotalCost),
+                AvgCost = g.Average(r => r.TotalCost)
+            })
+            .OrderByDescending(x => x.TotalCost)
+            .ToList();
+    }
+
+    private void CalculateCostByType(List<MaintenanceRecord> records)
+    {
+        var totalCost = records.Sum(r => r.TotalCost);
+        
+        _costByType = records
+            .GroupBy(r => r.Type)
+            .Select(g => new TypeMaintenanceSummary
+            {
+                Type = g.Key,
+                Count = g.Count(),
+                TotalCost = g.Sum(r => r.TotalCost),
+                Percentage = totalCost > 0 ? (g.Sum(r => r.TotalCost) / totalCost) * 100 : 0
+            })
+            .OrderByDescending(x => x.TotalCost)
+            .ToList();
+    }
+
+    private void CalculateFrequencyAnalysis(List<MaintenanceRecord> records)
+    {
+        _frequencyByTruckAndType = records
+            .GroupBy(r => new { r.TruckId, r.Type })
+            .Where(g => g.Count() >= 2) // Need at least 2 records to calculate frequency
+            .Select(g =>
+            {
+                var ordered = g.OrderBy(r => r.MaintenanceDate).ToList();
+                var daysBetween = new List<int>();
+                var milesBetween = new List<int>();
+                
+                for (int i = 1; i < ordered.Count; i++)
+                {
+                    daysBetween.Add((ordered[i].MaintenanceDate - ordered[i - 1].MaintenanceDate).Days);
+                    milesBetween.Add(ordered[i].Odometer - ordered[i - 1].Odometer);
+                }
+                
+                return new MaintenanceFrequency
+                {
+                    TruckId = g.Key.TruckId,
+                    Type = g.Key.Type,
+                    Count = g.Count(),
+                    AvgDaysBetween = daysBetween.Any() ? (int?)daysBetween.Average() : null,
+                    AvgMilesBetween = milesBetween.Any() ? (int?)milesBetween.Average() : null,
+                    LastServiceDate = ordered.Last().MaintenanceDate
+                };
+            })
+            .OrderBy(x => x.TruckId)
+            .ThenBy(x => x.Type)
+            .ToList();
+    }
+
+    private void CalculateTopVendors(List<MaintenanceRecord> records)
+    {
+        _topVendors = records
+            .Where(r => !string.IsNullOrEmpty(r.Vendor))
+            .GroupBy(r => r.Vendor)
+            .Select(g => new VendorSummary
+            {
+                Vendor = g.Key!,
+                Count = g.Count(),
+                TotalCost = g.Sum(r => r.TotalCost)
+            })
+            .OrderByDescending(x => x.TotalCost)
+            .Take(10)
+            .ToList();
+    }
+
+    private string GetMaintenanceIcon(MaintenanceType type)
+    {
+        return type switch
+        {
+            MaintenanceType.OilChange => Icons.Material.Filled.WaterDrop,
+            MaintenanceType.Tires => Icons.Material.Filled.Circle,
+            MaintenanceType.Brakes => Icons.Material.Filled.StopCircle,
+            MaintenanceType.Transmission => Icons.Material.Filled.Settings,
+            MaintenanceType.Engine => Icons.Material.Filled.Engineering,
+            MaintenanceType.Electrical => Icons.Material.Filled.Bolt,
+            MaintenanceType.HVAC => Icons.Material.Filled.Thermostat,
+            MaintenanceType.DOTInspection => Icons.Material.Filled.VerifiedUser,
+            MaintenanceType.AnnualInspection => Icons.Material.Filled.CheckCircle,
+            MaintenanceType.PreventiveMaintenance => Icons.Material.Filled.Schedule,
+            MaintenanceType.Repair => Icons.Material.Filled.Build,
+            _ => Icons.Material.Filled.Handyman
+        };
+    }
+
+    private Color GetMaintenanceColor(MaintenanceType type)
+    {
+        return type switch
+        {
+            MaintenanceType.DOTInspection or MaintenanceType.AnnualInspection => Color.Warning,
+            MaintenanceType.Repair => Color.Error,
+            MaintenanceType.OilChange or MaintenanceType.PreventiveMaintenance => Color.Success,
+            _ => Color.Primary
+        };
+    }
+
+    // Data classes
+    private class TruckMaintenanceSummary
+    {
+        public string TruckId { get; set; } = "";
+        public int Count { get; set; }
+        public decimal TotalCost { get; set; }
+        public decimal AvgCost { get; set; }
+    }
+
+    private class TypeMaintenanceSummary
+    {
+        public MaintenanceType Type { get; set; }
+        public int Count { get; set; }
+        public decimal TotalCost { get; set; }
+        public decimal Percentage { get; set; }
+    }
+
+    private class MaintenanceFrequency
+    {
+        public string TruckId { get; set; } = "";
+        public MaintenanceType Type { get; set; }
+        public int Count { get; set; }
+        public int? AvgDaysBetween { get; set; }
+        public int? AvgMilesBetween { get; set; }
+        public DateTime LastServiceDate { get; set; }
+    }
+
+    private class VendorSummary
+    {
+        public string Vendor { get; set; } = "";
+        public int Count { get; set; }
+        public decimal TotalCost { get; set; }
+    }
+}

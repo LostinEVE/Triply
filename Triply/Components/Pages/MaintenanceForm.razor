@@ -1,0 +1,629 @@
+@page "/maintenance/add"
+@page "/maintenance/edit/{MaintenanceId:guid}"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+
+<PageTitle>@(_isNew ? "Add Maintenance Record" : "Edit Maintenance Record") - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Build" Class="mr-2" />
+    @(_isNew ? "Add Maintenance Record" : "Edit Maintenance Record")
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudForm @ref="_form" @bind-IsValid="@_formValid">
+                        <MudGrid>
+                            <!-- Truck Selector -->
+                            <MudItem xs="12" md="6">
+                                <MudSelect @bind-Value="_maintenance.TruckId" 
+                                          Label="Truck" 
+                                          T="string"
+                                          Variant="Variant.Outlined"
+                                          Required="true"
+                                          RequiredError="Truck is required">
+                                    @foreach (var truck in _trucks)
+                                    {
+                                        <MudSelectItem Value="@truck.TruckId">
+                                            @truck.TruckId - @truck.Make @truck.Model
+                                        </MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            
+                            <!-- Maintenance Type -->
+                            <MudItem xs="12" md="6">
+                                <MudSelect @bind-Value="_maintenance.Type" 
+                                          Label="Maintenance Type" 
+                                          T="MaintenanceType"
+                                          Variant="Variant.Outlined"
+                                          Required="true">
+                                    @foreach (MaintenanceType type in Enum.GetValues(typeof(MaintenanceType)))
+                                    {
+                                        <MudSelectItem Value="@type">
+                                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                                <MudIcon Icon="@GetMaintenanceIcon(type)" Size="Size.Small" />
+                                                <span>@type.ToString()</span>
+                                            </MudStack>
+                                        </MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            
+                            <!-- Maintenance Date -->
+                            <MudItem xs="12" md="6">
+                                <MudDatePicker @bind-Date="_maintenanceDate" 
+                                              Label="Maintenance Date" 
+                                              Required="true"
+                                              Variant="Variant.Outlined" />
+                            </MudItem>
+                            
+                            <!-- Current Odometer -->
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_maintenance.Odometer" 
+                                                Label="Current Odometer" 
+                                                Required="true"
+                                                RequiredError="Odometer is required"
+                                                Adornment="Adornment.End"
+                                                AdornmentText="miles"
+                                                Format="N0"
+                                                Min="0"
+                                                Variant="Variant.Outlined" />
+                            </MudItem>
+                            
+                            <!-- Description -->
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_maintenance.Description" 
+                                             Label="Description" 
+                                             Lines="3"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+                            
+                            <!-- Vendor -->
+                            <MudItem xs="12" md="6">
+                                <MudAutocomplete T="string" 
+                                                @bind-Value="_maintenance.Vendor"
+                                                Label="Vendor" 
+                                                SearchFunc="@SearchVendors"
+                                                Variant="Variant.Outlined"
+                                                ResetValueOnEmptyText="false"
+                                                CoerceText="false"
+                                                Clearable="true" />
+                            </MudItem>
+                            
+                            <!-- Warranty Work Checkbox -->
+                            <MudItem xs="12" md="6">
+                                <MudSwitch @bind-Value="_maintenance.IsWarranty" 
+                                          Label="Warranty Work" 
+                                          Color="Color.Success"
+                                          T="bool" />
+                                @if (_maintenance.IsWarranty)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Success">
+                                        Costs will be set to $0.00
+                                    </MudText>
+                                }
+                            </MudItem>
+                            
+                            <!-- Labor Cost -->
+                            <MudItem xs="12" md="4">
+                                <MudNumericField Value="@_maintenance.LaborCost" 
+                                                ValueChanged="@((decimal val) => { _maintenance.LaborCost = val; CalculateTotalCost(); })"
+                                                Label="Labor Cost" 
+                                                Adornment="Adornment.Start"
+                                                AdornmentText="$"
+                                                Format="N2"
+                                                Min="0"
+                                                Disabled="@_maintenance.IsWarranty"
+                                                Variant="Variant.Outlined" />
+                            </MudItem>
+                            
+                            <!-- Parts Cost -->
+                            <MudItem xs="12" md="4">
+                                <MudNumericField Value="@_maintenance.PartsCost" 
+                                                ValueChanged="@((decimal val) => { _maintenance.PartsCost = val; CalculateTotalCost(); })"
+                                                Label="Parts Cost" 
+                                                Adornment="Adornment.Start"
+                                                AdornmentText="$"
+                                                Format="N2"
+                                                Min="0"
+                                                Disabled="@_maintenance.IsWarranty"
+                                                Variant="Variant.Outlined" />
+                            </MudItem>
+                            
+                            <!-- Total Cost -->
+                            <MudItem xs="12" md="4">
+                                <MudNumericField @bind-Value="_maintenance.TotalCost" 
+                                                Label="Total Cost" 
+                                                Adornment="Adornment.Start"
+                                                AdornmentText="$"
+                                                Format="N2"
+                                                Min="0"
+                                                Disabled="@(_maintenance.IsWarranty || _autoCalculateTotal)"
+                                                Variant="Variant.Outlined"
+                                                HelperText="@(_autoCalculateTotal ? "Auto-calculated" : "Manual override")" />
+                                <MudSwitch @bind-Value="_autoCalculateTotal" 
+                                          Label="Auto-calculate" 
+                                          Size="Size.Small"
+                                          Color="Color.Primary"
+                                          T="bool" />
+                            </MudItem>
+                            
+                            <!-- Schedule Next Maintenance -->
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.h6" Class="mt-3 mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" />
+                                    Schedule Next Maintenance
+                                </MudText>
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudNumericField @bind-Value="_maintenance.NextDueOdometer" 
+                                                Label="Next Due Odometer (Optional)" 
+                                                Adornment="Adornment.End"
+                                                AdornmentText="miles"
+                                                Format="N0"
+                                                Min="@_maintenance.Odometer"
+                                                Clearable="true"
+                                                Variant="Variant.Outlined"
+                                                HelperText="Leave blank if not applicable" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudDatePicker @bind-Date="_nextDueDate" 
+                                              Label="Next Due Date (Optional)" 
+                                              MinDate="@DateTime.Today"
+                                              Clearable="true"
+                                              Variant="Variant.Outlined"
+                                              HelperText="Leave blank if not applicable" />
+                            </MudItem>
+                            
+                            <!-- Quick Schedule Buttons -->
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.caption" Class="mb-2">Quick Schedule:</MudText>
+                                <MudStack Row="true" Spacing="2">
+                                    <MudButton Size="Size.Small" 
+                                              Variant="Variant.Outlined" 
+                                              OnClick="@(() => SetNextMaintenance(3000, 90))">
+                                        3k mi / 3 months
+                                    </MudButton>
+                                    <MudButton Size="Size.Small" 
+                                              Variant="Variant.Outlined" 
+                                              OnClick="@(() => SetNextMaintenance(5000, 180))">
+                                        5k mi / 6 months
+                                    </MudButton>
+                                    <MudButton Size="Size.Small" 
+                                              Variant="Variant.Outlined" 
+                                              OnClick="@(() => SetNextMaintenance(10000, 365))">
+                                        10k mi / 1 year
+                                    </MudButton>
+                                </MudStack>
+                            </MudItem>
+                            
+                            <!-- Notes -->
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_maintenance.Notes" 
+                                             Label="Notes" 
+                                             Lines="4"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+                            
+                            <!-- Document Upload -->
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.body2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" Class="mr-1" />
+                                    Attach Receipt/Document
+                                </MudText>
+                                <MudFileUpload T="IBrowserFile" 
+                                              Accept=".pdf,.jpg,.jpeg,.png"
+                                              FilesChanged="HandleFileUpload"
+                                              MaximumFileCount="1">
+                                    <ActivatorContent>
+                                        <MudButton Variant="Variant.Outlined"
+                                                  Color="Color.Default"
+                                                  StartIcon="@Icons.Material.Filled.CloudUpload">
+                                            @(_hasDocument ? "Replace Document" : "Upload Document")
+                                        </MudButton>
+                                    </ActivatorContent>
+                                </MudFileUpload>
+                                @if (_hasDocument)
+                                {
+                                    <MudChip T="string" 
+                                            Color="Color.Success" 
+                                            Size="Size.Small" 
+                                            Icon="@Icons.Material.Filled.CheckCircle"
+                                            OnClose="ClearDocument"
+                                            CloseIcon="@Icons.Material.Filled.Cancel">
+                                        Document Attached
+                                    </MudChip>
+                                }
+                            </MudItem>
+                        </MudGrid>
+                    </MudForm>
+                </MudCardContent>
+                
+                <MudCardActions>
+                    <MudStack Row="true" Spacing="3" Class="pa-4">
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Default"
+                                  OnClick="Cancel">
+                            Cancel
+                        </MudButton>
+                        <MudSpacer />
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Primary" 
+                                  StartIcon="@Icons.Material.Filled.Save"
+                                  Disabled="@(!_formValid)"
+                                  OnClick="SaveAsync">
+                            Save
+                        </MudButton>
+                    </MudStack>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Summary Sidebar -->
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Maintenance Summary</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <div>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">TRUCK</MudText>
+                            <MudText Typo="Typo.body1">
+                                @(_selectedTruck?.TruckId ?? "Select truck")
+                            </MudText>
+                            @if (_selectedTruck != null)
+                            {
+                                <MudText Typo="Typo.caption">
+                                    Current Odometer: @_selectedTruck.CurrentOdometer.ToString("N0") mi
+                                </MudText>
+                            }
+                        </div>
+                        
+                        <MudDivider />
+                        
+                        <div>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">TYPE</MudText>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <MudIcon Icon="@GetMaintenanceIcon(_maintenance.Type)" Size="Size.Small" />
+                                <MudText Typo="Typo.body1">@_maintenance.Type.ToString()</MudText>
+                            </MudStack>
+                        </div>
+                        
+                        <MudDivider />
+                        
+                        <div>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">DATE</MudText>
+                            <MudText Typo="Typo.body1">
+                                @_maintenance.MaintenanceDate.ToString("MM/dd/yyyy")
+                            </MudText>
+                        </div>
+                        
+                        <MudDivider />
+                        
+                        <div>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">COST BREAKDOWN</MudText>
+                            @if (_maintenance.IsWarranty)
+                            {
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small">
+                                    Warranty Work - $0.00
+                                </MudChip>
+                            }
+                            else
+                            {
+                                <MudStack Spacing="1">
+                                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                        <MudText Typo="Typo.body2">Labor:</MudText>
+                                        <MudText Typo="Typo.body2">@_maintenance.LaborCost.ToString("C2")</MudText>
+                                    </MudStack>
+                                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                        <MudText Typo="Typo.body2">Parts:</MudText>
+                                        <MudText Typo="Typo.body2">@_maintenance.PartsCost.ToString("C2")</MudText>
+                                    </MudStack>
+                                    <MudDivider />
+                                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                        <MudText Typo="Typo.h6">Total:</MudText>
+                                        <MudText Typo="Typo.h6" Color="Color.Primary">
+                                            @_maintenance.TotalCost.ToString("C2")
+                                        </MudText>
+                                    </MudStack>
+                                </MudStack>
+                            }
+                        </div>
+                        
+                        @if (_maintenance.NextDueDate.HasValue || _maintenance.NextDueOdometer.HasValue)
+                        {
+                            <MudDivider />
+                            <div>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">NEXT SCHEDULED</MudText>
+                                @if (_maintenance.NextDueDate.HasValue)
+                                {
+                                    <MudText Typo="Typo.body2">
+                                        Date: @_maintenance.NextDueDate.Value.ToString("MM/dd/yyyy")
+                                    </MudText>
+                                }
+                                @if (_maintenance.NextDueOdometer.HasValue)
+                                {
+                                    <MudText Typo="Typo.body2">
+                                        Odometer: @_maintenance.NextDueOdometer.Value.ToString("N0") mi
+                                    </MudText>
+                                }
+                            </div>
+                        }
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public Guid? MaintenanceId { get; set; }
+
+    private MaintenanceRecord _maintenance = new();
+    private DateTime? _maintenanceDate;
+    private DateTime? _nextDueDate;
+    private MudForm _form = null!;
+    private bool _formValid = false;
+    private bool _loading = false;
+    private bool _isNew => !MaintenanceId.HasValue;
+    private bool _autoCalculateTotal = true;
+    private bool _hasDocument = false;
+    
+    private List<Truck> _trucks = new();
+    private List<string> _vendors = new();
+    private Truck? _selectedTruck;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTrucksAsync();
+        await LoadVendorsAsync();
+        
+        // Check for query parameters
+        var uri = new Uri(NavigationManager.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        
+        if (!_isNew && MaintenanceId.HasValue)
+        {
+            await LoadMaintenanceAsync();
+        }
+        else
+        {
+            _maintenance = new MaintenanceRecord
+            {
+                MaintenanceDate = DateTime.Now,
+                Type = MaintenanceType.OilChange
+            };
+            _maintenanceDate = DateTime.Now;
+            
+            // Pre-fill from query params if available
+            if (query["truckId"] != null)
+            {
+                _maintenance.TruckId = query["truckId"]!;
+            }
+            if (query["type"] != null && Enum.TryParse<MaintenanceType>(query["type"], out var type))
+            {
+                _maintenance.Type = type;
+            }
+        }
+        
+        UpdateSelectedTruck();
+    }
+
+    private async Task LoadTrucksAsync()
+    {
+        try
+        {
+            _trucks = await UnitOfWork.Trucks.GetQueryable()
+                .OrderBy(t => t.TruckId)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading trucks: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadVendorsAsync()
+    {
+        try
+        {
+            _vendors = await UnitOfWork.MaintenanceRecords.GetQueryable()
+                .Where(m => !string.IsNullOrEmpty(m.Vendor))
+                .Select(m => m.Vendor!)
+                .Distinct()
+                .OrderBy(v => v)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading vendors: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadMaintenanceAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            var maintenance = await UnitOfWork.MaintenanceRecords.GetQueryable()
+                .Include(m => m.Truck)
+                .FirstOrDefaultAsync(m => m.MaintenanceId == MaintenanceId);
+            
+            if (maintenance != null)
+            {
+                _maintenance = maintenance;
+                _maintenanceDate = maintenance.MaintenanceDate;
+                _nextDueDate = maintenance.NextDueDate;
+                _hasDocument = maintenance.Documents != null && maintenance.Documents.Length > 0;
+                
+                UpdateSelectedTruck();
+            }
+            else
+            {
+                Snackbar.Add("Maintenance record not found", Severity.Error);
+                NavigationManager.NavigateTo("/maintenance");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading maintenance record: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void UpdateSelectedTruck()
+    {
+        _selectedTruck = _trucks.FirstOrDefault(t => t.TruckId == _maintenance.TruckId);
+        StateHasChanged();
+    }
+
+    private Task<IEnumerable<string>> SearchVendors(string value, CancellationToken token)
+    {
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult(_vendors.AsEnumerable());
+        
+        return Task.FromResult(_vendors.Where(v => v.Contains(value, StringComparison.InvariantCultureIgnoreCase)));
+    }
+
+    private void CalculateTotalCost()
+    {
+        if (_maintenance.IsWarranty)
+        {
+            _maintenance.LaborCost = 0;
+            _maintenance.PartsCost = 0;
+            _maintenance.TotalCost = 0;
+        }
+        else if (_autoCalculateTotal)
+        {
+            _maintenance.TotalCost = _maintenance.LaborCost + _maintenance.PartsCost;
+        }
+        StateHasChanged();
+    }
+
+    private void SetNextMaintenance(int miles, int days)
+    {
+        _maintenance.NextDueOdometer = _maintenance.Odometer + miles;
+        _nextDueDate = DateTime.Now.AddDays(days);
+    }
+
+    private async Task HandleFileUpload(IBrowserFile file)
+    {
+        try
+        {
+            if (file.Size > 5 * 1024 * 1024) // 5MB limit
+            {
+                Snackbar.Add("File size must be less than 5MB", Severity.Error);
+                return;
+            }
+            
+            using var memoryStream = new MemoryStream();
+            await file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024).CopyToAsync(memoryStream);
+            _maintenance.Documents = memoryStream.ToArray();
+            _hasDocument = true;
+            
+            Snackbar.Add("Document uploaded successfully", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error uploading document: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void ClearDocument()
+    {
+        _maintenance.Documents = null;
+        _hasDocument = false;
+    }
+
+    private string GetMaintenanceIcon(MaintenanceType type)
+    {
+        return type switch
+        {
+            MaintenanceType.OilChange => Icons.Material.Filled.WaterDrop,
+            MaintenanceType.Tires => Icons.Material.Filled.Circle,
+            MaintenanceType.Brakes => Icons.Material.Filled.StopCircle,
+            MaintenanceType.Transmission => Icons.Material.Filled.Settings,
+            MaintenanceType.Engine => Icons.Material.Filled.Engineering,
+            MaintenanceType.Electrical => Icons.Material.Filled.Bolt,
+            MaintenanceType.HVAC => Icons.Material.Filled.Thermostat,
+            MaintenanceType.DOTInspection => Icons.Material.Filled.VerifiedUser,
+            MaintenanceType.AnnualInspection => Icons.Material.Filled.CheckCircle,
+            MaintenanceType.PreventiveMaintenance => Icons.Material.Filled.Schedule,
+            MaintenanceType.Repair => Icons.Material.Filled.Build,
+            _ => Icons.Material.Filled.Handyman
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await _form.Validate();
+            
+            if (!_formValid)
+            {
+                Snackbar.Add("Please fix validation errors", Severity.Error);
+                return;
+            }
+            
+            // Set dates
+            if (_maintenanceDate.HasValue)
+            {
+                _maintenance.MaintenanceDate = _maintenanceDate.Value;
+            }
+            _maintenance.NextDueDate = _nextDueDate;
+            
+            // Calculate total cost
+            CalculateTotalCost();
+            
+            if (_isNew)
+            {
+                _maintenance.MaintenanceId = Guid.NewGuid();
+                await UnitOfWork.MaintenanceRecords.AddAsync(_maintenance);
+            }
+            else
+            {
+                await UnitOfWork.MaintenanceRecords.UpdateAsync(_maintenance);
+            }
+            
+            await UnitOfWork.SaveChangesAsync();
+            
+            Snackbar.Add($"Maintenance record {(_isNew ? "created" : "updated")} successfully", Severity.Success);
+            NavigationManager.NavigateTo("/maintenance");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving maintenance record: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/maintenance");
+    }
+}

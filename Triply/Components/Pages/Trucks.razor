@@ -1,0 +1,220 @@
+@page "/trucks"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+@inject IDialogService DialogService
+
+<PageTitle>Trucks - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Class="mr-2" />
+    Trucks
+    @if (_trucks != null)
+    {
+        <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-2">@_trucks.Count total</MudChip>
+    }
+</MudText>
+
+<MudCard Elevation="3">
+    <MudCardContent>
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudTextField @bind-Value="_searchString" 
+                         Placeholder="Search trucks..." 
+                         Adornment="Adornment.Start" 
+                         AdornmentIcon="@Icons.Material.Filled.Search"
+                         Immediate="true"
+                         Class="flex-grow-1" />
+            
+            <MudSelect @bind-Value="_selectedStatus" 
+                      Label="Filter by Status" 
+                      T="TruckStatus?"
+                      Clearable="true"
+                      Style="min-width: 200px;">
+                <MudSelectItem T="TruckStatus?" Value="@((TruckStatus?)null)">All Statuses</MudSelectItem>
+                <MudSelectItem T="TruckStatus?" Value="@TruckStatus.Active">Active</MudSelectItem>
+                <MudSelectItem T="TruckStatus?" Value="@TruckStatus.InShop">In Shop</MudSelectItem>
+                <MudSelectItem T="TruckStatus?" Value="@TruckStatus.Inactive">Inactive</MudSelectItem>
+                <MudSelectItem T="TruckStatus?" Value="@TruckStatus.Sold">Sold</MudSelectItem>
+            </MudSelect>
+            
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      StartIcon="@Icons.Material.Filled.Add"
+                      OnClick="@(() => NavigateTo("/trucks/add"))">
+                Add Truck
+            </MudButton>
+        </MudStack>
+
+        <MudDataGrid T="Truck" 
+                     Items="@FilteredTrucks" 
+                     Loading="@_loading"
+                     Dense="true"
+                     Hover="true"
+                     Striped="true"
+                     RowsPerPage="10">
+            <Columns>
+                <PropertyColumn Property="x => x.TruckId" Title="Truck #" />
+                
+                <TemplateColumn Title="Make/Model">
+                    <CellTemplate>
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.body2"><strong>@context.Item.Make @context.Item.Model</strong></MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Year: @context.Item.Year</MudText>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <PropertyColumn Property="x => x.VIN" Title="VIN" />
+                
+                <TemplateColumn Title="Status">
+                    <CellTemplate>
+                        <MudChip T="string" 
+                                Size="Size.Small" 
+                                Color="@GetStatusColor(context.Item.Status)">
+                            @context.Item.Status
+                        </MudChip>
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <TemplateColumn Title="Odometer">
+                    <CellTemplate>
+                        @if (context.Item.CurrentOdometer > 0)
+                        {
+                            <MudText Typo="Typo.body2">@context.Item.CurrentOdometer.ToString("N0") mi</MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">-</MudText>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <TemplateColumn Title="License Plate">
+                    <CellTemplate>
+                        @if (!string.IsNullOrEmpty(context.Item.LicensePlate))
+                        {
+                            <MudText Typo="Typo.body2">@context.Item.LicensePlate</MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">-</MudText>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <TemplateColumn Title="Actions" Sortable="false">
+                    <CellTemplate>
+                        <MudStack Row="true" Spacing="1">
+                            <MudTooltip Text="View Details">
+                                <MudIconButton Icon="@Icons.Material.Filled.Visibility" 
+                                             Size="Size.Small" 
+                                             Color="Color.Primary"
+                                             OnClick="@(() => NavigateTo($"/trucks/{context.Item.TruckId}"))"/>
+                            </MudTooltip>
+                            <MudTooltip Text="Edit">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                             Size="Size.Small" 
+                                             Color="Color.Info"
+                                             OnClick="@(() => NavigateTo($"/trucks/{context.Item.TruckId}/edit"))"/>
+                            </MudTooltip>
+                            <MudTooltip Text="View Expenses">
+                                <MudIconButton Icon="@Icons.Material.Filled.Receipt" 
+                                             Size="Size.Small" 
+                                             Color="Color.Error"
+                                             OnClick="@(() => NavigateTo($"/expenses?truckId={context.Item.TruckId}"))"/>
+                            </MudTooltip>
+                            <MudTooltip Text="View Maintenance">
+                                <MudIconButton Icon="@Icons.Material.Filled.Build" 
+                                             Size="Size.Small" 
+                                             Color="Color.Warning"
+                                             OnClick="@(() => NavigateTo($"/maintenance?truckId={context.Item.TruckId}"))"/>
+                            </MudTooltip>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            
+            <PagerContent>
+                <MudDataGridPager T="Truck" />
+            </PagerContent>
+        </MudDataGrid>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private List<Truck> _trucks = new();
+    private bool _loading = true;
+    private string _searchString = "";
+    private TruckStatus? _selectedStatus = null;
+
+    private IEnumerable<Truck> FilteredTrucks
+    {
+        get
+        {
+            var filtered = _trucks.AsEnumerable();
+            
+            if (!string.IsNullOrWhiteSpace(_searchString))
+            {
+                filtered = filtered.Where(t => 
+                    t.TruckId.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+                    t.Make?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true ||
+                    t.Model?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true ||
+                    t.VIN?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true ||
+                    t.LicensePlate?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true);
+            }
+            
+            if (_selectedStatus.HasValue)
+            {
+                filtered = filtered.Where(t => t.Status == _selectedStatus.Value);
+            }
+            
+            return filtered;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTrucksAsync();
+    }
+
+    private async Task LoadTrucksAsync()
+    {
+        try
+        {
+            _loading = true;
+            _trucks = await UnitOfWork.Trucks.GetQueryable()
+                .OrderBy(t => t.TruckId)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading trucks: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+    }
+
+    private Color GetStatusColor(TruckStatus status)
+    {
+        return status switch
+        {
+            TruckStatus.Active => Color.Success,
+            TruckStatus.InShop => Color.Warning,
+            TruckStatus.Inactive => Color.Default,
+            TruckStatus.Sold => Color.Default,
+            _ => Color.Default
+        };
+    }
+}

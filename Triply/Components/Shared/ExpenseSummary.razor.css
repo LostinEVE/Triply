@@ -1,0 +1,28 @@
+.text-right {
+    text-align: right !important;
+}
+
+/* Summary cards hover effect */
+::deep .mud-card:hover {
+    transform: translateY(-2px);
+    transition: transform 0.2s ease;
+}
+
+/* Category summary cards */
+::deep .mud-card-content .mud-stack {
+    min-height: 80px;
+}
+
+/* Chart container */
+::deep .mud-chart {
+    margin: 0 auto;
+}
+
+/* Table footer styling */
+::deep .mud-simple-table tfoot tr {
+    background-color: rgba(0,0,0,0.02);
+}
+
+::deep .mud-theme-dark .mud-simple-table tfoot tr {
+    background-color: rgba(255,255,255,0.05);
+}

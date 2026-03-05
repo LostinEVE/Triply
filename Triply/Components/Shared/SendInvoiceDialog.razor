@@ -1,0 +1,161 @@
+@namespace Triply.Components.Shared
+@using MudBlazor
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@using Triply.Components.Shared
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+@inject IEmailService EmailService
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudAlert Severity="Severity.Info" Dense="true">
+                This will send the invoice to the customer via email with a PDF attachment.
+            </MudAlert>
+
+            <MudTextField Value="@_recipientEmail" 
+                         Label="Recipient Email" 
+                         Variant="Variant.Outlined"
+                         Disabled="true"
+                         Adornment="Adornment.Start"
+                         AdornmentIcon="@Icons.Material.Filled.Email" />
+
+            <MudTextField @bind-Value="_emailSubject" 
+                         Label="Email Subject" 
+                         Variant="Variant.Outlined" />
+
+            <MudTextField @bind-Value="_emailBody" 
+                         Label="Email Message" 
+                         Lines="6"
+                         Variant="Variant.Outlined" />
+
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Attachment: @($"Invoice_{Invoice.InvoiceNumber}.pdf")
+            </MudText>
+
+            @if (_sending)
+            {
+                <MudAlert Severity="Severity.Info">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                        <MudText>Sending email...</MudText>
+                    </MudStack>
+                </MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="@_sending">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" 
+                  Color="Color.Success" 
+                  StartIcon="@Icons.Material.Filled.Send"
+                  OnClick="SendEmailAsync"
+                  Disabled="@_sending">
+            @(_sending ? "Sending..." : "Send Invoice")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+
+    [Parameter]
+    public Invoice Invoice { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback OnSent { get; set; }
+
+    private string _recipientEmail = "";
+    private string _emailSubject = "";
+    private string _emailBody = "";
+    private bool _sending = false;
+    private bool _emailSent = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _recipientEmail = Invoice.Customer.ContactEmail ?? "";
+        _emailSubject = $"Invoice {Invoice.InvoiceNumber} from Triply Trucking";
+        _emailBody = $@"Dear {Invoice.Customer.CompanyName},
+
+Please find attached Invoice {Invoice.InvoiceNumber} for the services provided.
+
+Invoice Date: {Invoice.InvoiceDate:MM/dd/yyyy}
+Due Date: {Invoice.DueDate:MM/dd/yyyy}
+Total Amount: {Invoice.TotalAmount:C2}
+
+Please remit payment by the due date.
+
+Thank you for your business!
+
+Triply Trucking";
+    }
+
+    private async Task SendEmailAsync()
+    {
+        try
+        {
+            _sending = true;
+            StateHasChanged();
+            
+            // Get company settings
+            var companySettings = await UnitOfWork.CompanySettings.GetAllAsync();
+            var settings = companySettings.FirstOrDefault();
+
+            if (settings == null)
+            {
+                Snackbar.Add("Company settings not configured. Please configure email settings first.", Severity.Error);
+                return;
+            }
+            
+            // Send email via service (using dynamic to work around interface resolution issues)
+            EmailSendResult result;
+            try
+            {
+                dynamic emailSvc = EmailService;
+                result = await emailSvc.SendInvoiceEmailAsync(Invoice, settings);
+            }
+            catch (Exception emailEx)
+            {
+                Snackbar.Add($"Email service error: {emailEx.Message}", Severity.Error);
+                return;
+            }
+            
+            if (result.Success)
+            {
+                // Update invoice status
+                Invoice.Status = InvoiceStatus.Sent;
+                Invoice.SentDate = DateTime.Now;
+                await UnitOfWork.Invoices.UpdateAsync(Invoice);
+                await UnitOfWork.SaveChangesAsync();
+                
+                Snackbar.Add($"Invoice sent successfully to {_recipientEmail}", 
+                    Severity.Success, 
+                    config => { config.Icon = Icons.Material.Filled.CheckCircle; });
+
+                if (OnSent.HasDelegate)
+                {
+                    await OnSent.InvokeAsync();
+                }
+            }
+            else
+            {
+                Snackbar.Add($"Failed to send invoice: {result.ErrorMessage}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error sending invoice: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _sending = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Cancel()
+    {
+        // Dialog will close automatically
+    }
+}

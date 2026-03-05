@@ -1,0 +1,574 @@
+@page "/reports/tax-summary"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using CoreCompanySettings = Triply.Core.Models.CompanySettings
+@using Triply.Core.Models
+@using Triply.Core.Interfaces
+@inject IUnitOfWork UnitOfWork
+@inject ISnackbar Snackbar
+@inject IPdfGenerationService PdfService
+
+<PageTitle>Tax Summary Report - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Class="mr-2" />
+    Tax Summary Report
+</MudText>
+
+<!-- Filters -->
+<MudCard Elevation="3" Class="mb-3">
+    <MudCardContent>
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudSelect @bind-Value="_selectedYear" 
+                      Label="Year" 
+                      T="int"
+                      Variant="Variant.Outlined"
+                      Style="min-width: 120px;">
+                @for (int year = DateTime.Now.Year; year >= DateTime.Now.Year - 3; year--)
+                {
+                    <MudSelectItem Value="@year">@year</MudSelectItem>
+                }
+            </MudSelect>
+            
+            <MudSelect @bind-Value="_selectedQuarter" 
+                      Label="Quarter" 
+                      T="int"
+                      Variant="Variant.Outlined"
+                      Style="min-width: 120px;">
+                <MudSelectItem Value="1">Q1 (Jan-Mar)</MudSelectItem>
+                <MudSelectItem Value="2">Q2 (Apr-Jun)</MudSelectItem>
+                <MudSelectItem Value="3">Q3 (Jul-Sep)</MudSelectItem>
+                <MudSelectItem Value="4">Q4 (Oct-Dec)</MudSelectItem>
+            </MudSelect>
+            
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      OnClick="RunReportAsync"
+                      Disabled="@_loading">
+                Run Report
+            </MudButton>
+            
+            <MudSpacer />
+            
+            @if (_taxEstimate != null)
+            {
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Default" 
+                          StartIcon="@Icons.Material.Filled.Print"
+                          OnClick="PrintReport">
+                    Print
+                </MudButton>
+                
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Error" 
+                          StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                          OnClick="ExportToPDFAsync">
+                    Export PDF
+                </MudButton>
+            }
+        </MudStack>
+    </MudCardContent>
+</MudCard>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_taxEstimate != null)
+{
+    <!-- Report Header -->
+    <MudCard Elevation="3" Class="mb-3">
+        <MudCardContent>
+            <MudStack AlignItems="AlignItems.Center" Spacing="1">
+                <MudText Typo="Typo.h5">Quarterly Tax Estimate</MudText>
+                <MudText Typo="Typo.h6">@_companySettings.CompanyName</MudText>
+                <MudText Typo="Typo.body1">@_taxEstimate.QuarterLabel</MudText>
+                <MudText Typo="Typo.body2">@_taxEstimate.StartDate.ToString("MMM d, yyyy") - @_taxEstimate.EndDate.ToString("MMM d, yyyy")</MudText>
+            </MudStack>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- Income Summary -->
+    <MudCard Elevation="3" Class="mb-3">
+        <MudCardHeader Style="background-color: #4caf50; color: white;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">INCOME SUMMARY</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudStack Spacing="2">
+                <MudStack Row="true" Justify="Justify.SpaceBetween">
+                    <MudText Typo="Typo.body1">Gross Income</MudText>
+                    <MudText Typo="Typo.body1"><strong>@_taxEstimate.GrossIncome.ToString("C2")</strong></MudText>
+                </MudStack>
+                
+                <MudStack Row="true" Justify="Justify.SpaceBetween">
+                    <MudText Typo="Typo.body1">Total Deductions</MudText>
+                    <MudText Typo="Typo.body1" Color="Color.Error">(@_deductions.TotalDeductions.ToString("C2"))</MudText>
+                </MudStack>
+                
+                <MudDivider />
+                
+                <MudStack Row="true" Justify="Justify.SpaceBetween">
+                    <MudText Typo="Typo.h6">Net Profit</MudText>
+                    <MudText Typo="Typo.h6" Color="Color.Success">@_taxEstimate.NetProfit.ToString("C2")</MudText>
+                </MudStack>
+            </MudStack>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- Tax Deductions (Schedule C Format) -->
+    <MudCard Elevation="3" Class="mb-3">
+        <MudCardHeader Style="background-color: #2196f3; color: white;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">TAX DEDUCTIONS (Schedule C Format)</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudTable Items="@_deductions.GetBreakdown().OrderByDescending(kvp => kvp.Value.Amount)" Dense="true" Hover="true" Elevation="0">
+                <HeaderContent>
+                    <MudTh>Category</MudTh>
+                    <MudTh Style="text-align: right;">Amount</MudTh>
+                    <MudTh Style="text-align: right;">% of Total</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    @if (context.Value.Amount > 0)
+                    {
+                        <MudTd>@context.Key</MudTd>
+                        <MudTd Style="text-align: right;"><strong>@context.Value.Amount.ToString("C2")</strong></MudTd>
+                        <MudTd Style="text-align: right;">
+                            <MudText Typo="Typo.caption">@context.Value.Percentage.ToString("N1")%</MudText>
+                        </MudTd>
+                    }
+                </RowTemplate>
+            </MudTable>
+            
+            <MudDivider Class="my-2" />
+            
+            <MudStack Row="true" Justify="Justify.SpaceBetween" Class="pa-2" Style="background-color: #e3f2fd;">
+                <MudText Typo="Typo.h6">Total Deductions</MudText>
+                <MudText Typo="Typo.h6">@_deductions.TotalDeductions.ToString("C2")</MudText>
+            </MudStack>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- Tax Calculations -->
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3" Class="mb-3">
+                <MudCardHeader Style="background-color: #ff9800; color: white;">
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">SELF-EMPLOYMENT TAX</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body2">Net Profit</MudText>
+                            <MudText Typo="Typo.body2">@_taxEstimate.NetProfit.ToString("C2")</MudText>
+                        </MudStack>
+                        
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body2">× 92.35%</MudText>
+                            <MudText Typo="Typo.body2">@_taxEstimate.SelfEmploymentTaxableIncome.ToString("C2")</MudText>
+                        </MudStack>
+                        
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body2">× 15.3% (SE Tax Rate)</MudText>
+                            <MudText Typo="Typo.body2"><strong>@_taxEstimate.SelfEmploymentTax.ToString("C2")</strong></MudText>
+                        </MudStack>
+                        
+                        <MudDivider />
+                        
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.caption">50% Deductible</MudText>
+                            <MudText Typo="Typo.caption">(@_taxEstimate.SelfEmploymentTaxDeduction.ToString("C2"))</MudText>
+                        </MudStack>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3" Class="mb-3">
+                <MudCardHeader Style="background-color: #9c27b0; color: white;">
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">FEDERAL INCOME TAX</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body2">Adjusted Gross Income</MudText>
+                            <MudText Typo="Typo.body2">@_taxEstimate.AdjustedGrossIncome.ToString("C2")</MudText>
+                        </MudStack>
+                        
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body2">Less: Standard Deduction</MudText>
+                            <MudText Typo="Typo.body2">(@_taxEstimate.StandardDeduction.ToString("C2"))</MudText>
+                        </MudStack>
+                        
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body2">Taxable Income</MudText>
+                            <MudText Typo="Typo.body2">@_taxEstimate.TaxableIncome.ToString("C2")</MudText>
+                        </MudStack>
+                        
+                        <MudDivider />
+                        
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body2"><strong>Federal Income Tax</strong></MudText>
+                            <MudText Typo="Typo.body2"><strong>@_taxEstimate.FederalIncomeTax.ToString("C2")</strong></MudText>
+                        </MudStack>
+                        
+                        @if (_taxEstimate.StateIncomeTax > 0)
+                        {
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2"><strong>State Income Tax</strong></MudText>
+                                <MudText Typo="Typo.body2"><strong>@_taxEstimate.StateIncomeTax.ToString("C2")</strong></MudText>
+                            </MudStack>
+                        }
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+    
+    <!-- Quarterly Payment Recommendation -->
+    <MudCard Elevation="3" Class="mb-3" Style="border-left: 5px solid #f44336;">
+        <MudCardContent>
+            <MudStack Spacing="3">
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <div>
+                        <MudText Typo="Typo.h5">Total Annual Tax Liability</MudText>
+                        <MudText Typo="Typo.caption">Effective Tax Rate: @_taxEstimate.EffectiveTaxRate.ToString("N1")%</MudText>
+                    </div>
+                    <MudText Typo="Typo.h4" Color="Color.Error">
+                        @_taxEstimate.TotalTaxLiability.ToString("C2")
+                    </MudText>
+                </MudStack>
+                
+                <MudDivider />
+                
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="pa-3" Style="background-color: #ffebee;">
+                    <div>
+                        <MudText Typo="Typo.h5">QUARTERLY ESTIMATED PAYMENT</MudText>
+                        <MudText Typo="Typo.body2">Due quarterly (Apr 15, Jun 15, Sep 15, Jan 15)</MudText>
+                    </div>
+                    <MudText Typo="Typo.h3" Color="Color.Error">
+                        @_taxEstimate.QuarterlyEstimatedPayment.ToString("C2")
+                    </MudText>
+                </MudStack>
+                
+                <MudDivider />
+                
+                <MudGrid>
+                    <MudItem xs="12" md="4">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">YTD Payments Made</MudText>
+                            <MudText Typo="Typo.h6">@_taxEstimate.PreviousPaymentsMade.ToString("C2")</MudText>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Remaining Due</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Warning">@_taxEstimate.RemainingDue.ToString("C2")</MudText>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Safe Harbor Status</MudText>
+                            <MudChip T="string" Color="@(_taxEstimate.MeetsSafeHarbor ? Color.Success : Color.Warning)">
+                                @(_taxEstimate.MeetsSafeHarbor ? "Met" : "Not Met")
+                            </MudChip>
+                        </MudStack>
+                    </MudItem>
+                </MudGrid>
+                
+                @if (!_taxEstimate.MeetsSafeHarbor)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">
+                        @_taxEstimate.SafeHarborMessage
+                    </MudAlert>
+                }
+            </MudStack>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- IFTA Summary -->
+    @if (_iftaSummary != null)
+    {
+        <MudCard Elevation="3" Class="mb-3">
+            <MudCardHeader Style="background-color: #00bcd4; color: white;">
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">IFTA SUMMARY FOR QUARTER</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudGrid>
+                    <MudItem xs="6" md="3">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Total Miles</MudText>
+                            <MudText Typo="Typo.h6">@_iftaSummary.TotalMiles.ToString("N0")</MudText>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="6" md="3">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Total Gallons</MudText>
+                            <MudText Typo="Typo.h6">@_iftaSummary.TotalGallons.ToString("N1")</MudText>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="6" md="3">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Fleet MPG</MudText>
+                            <MudText Typo="Typo.h6">@_iftaSummary.FleetMPG.ToString("N2")</MudText>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="6" md="3">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Net IFTA Tax</MudText>
+                            <MudText Typo="Typo.h6" Color="@(_iftaSummary.NetIFTATax >= 0 ? Color.Error : Color.Success)">
+                                @_iftaSummary.NetIFTATax.ToString("C2")
+                            </MudText>
+                        </MudStack>
+                    </MudItem>
+                </MudGrid>
+                
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Info" 
+                          StartIcon="@Icons.Material.Filled.Assessment"
+                          OnClick="@(() => NavigateTo($"/reports/ifta?year={_selectedYear}&quarter={_selectedQuarter}"))"
+                          Class="mt-3">
+                    View Full IFTA Report
+                </MudButton>
+            </MudCardContent>
+        </MudCard>
+    }
+}
+else
+{
+    <MudAlert Severity="Severity.Info">
+        Select a year and quarter, then click "Run Report" to generate the Tax Summary.
+    </MudAlert>
+}
+
+@code {
+    private QuarterlyTaxEstimate? _taxEstimate;
+    private TaxDeductionSummary _deductions = new();
+    private IFTAQuarterlyReport? _iftaSummary;
+    private CoreCompanySettings _companySettings = new();
+    
+    private bool _loading = false;
+    private int _selectedYear = DateTime.Now.Year;
+    private int _selectedQuarter = (DateTime.Now.Month - 1) / 3 + 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCompanySettingsAsync();
+    }
+
+    private async Task LoadCompanySettingsAsync()
+    {
+        try
+        {
+            _companySettings = await UnitOfWork.CompanySettings.GetQueryable().FirstOrDefaultAsync()
+                ?? new CoreCompanySettings { CompanyName = "Your Company" };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading company settings: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RunReportAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            // Calculate quarter date range
+            var startMonth = (_selectedQuarter - 1) * 3 + 1;
+            var startDate = new DateTime(_selectedYear, startMonth, 1);
+            var endDate = startDate.AddMonths(3).AddDays(-1);
+            
+            // Generate tax estimate
+            _taxEstimate = await GenerateTaxEstimateAsync(startDate, endDate);
+            
+            // Generate deductions summary
+            _deductions = await GenerateDeductionsSummaryAsync(startDate, endDate);
+            
+            // Get IFTA summary
+            _iftaSummary = await GenerateIFTASummaryAsync(startDate, endDate);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error generating report: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task<QuarterlyTaxEstimate> GenerateTaxEstimateAsync(DateTime startDate, DateTime endDate)
+    {
+        // Get loads (revenue)
+        var loads = await UnitOfWork.Loads.GetQueryable()
+            .Where(l => l.DeliveryDate.HasValue && 
+                       l.DeliveryDate.Value >= startDate && 
+                       l.DeliveryDate.Value <= endDate)
+            .ToListAsync();
+        
+        var grossIncome = loads.Sum(l => l.TotalAmount);
+        
+        // Get expenses (deductions)
+        var expenses = await UnitOfWork.Expenses.GetQueryable()
+            .Where(e => e.ExpenseDate >= startDate && e.ExpenseDate <= endDate)
+            .ToListAsync();
+        
+        var totalDeductions = expenses.Sum(e => e.Amount);
+        
+        // Calculate taxes (simplified - real calculation would be more complex)
+        var estimate = new QuarterlyTaxEstimate
+        {
+            Year = _selectedYear,
+            Quarter = _selectedQuarter,
+            StartDate = startDate,
+            EndDate = endDate,
+            GrossIncome = grossIncome,
+            TotalDeductions = totalDeductions,
+            StandardDeduction = 14600, // 2024 single filer
+            PreviousPaymentsMade = 0, // TODO: Get from TaxPayment records
+            MeetsSafeHarbor = true,
+            SafeHarborMessage = "Estimated payments meet safe harbor requirements"
+        };
+        
+        // Calculate federal income tax (simplified progressive tax)
+        var taxableIncome = estimate.TaxableIncome;
+        if (taxableIncome > 0)
+        {
+            // Simplified 2024 tax brackets for single filer
+            if (taxableIncome <= 11600) estimate.FederalIncomeTax = taxableIncome * 0.10m;
+            else if (taxableIncome <= 47150) estimate.FederalIncomeTax = 1160 + (taxableIncome - 11600) * 0.12m;
+            else if (taxableIncome <= 100525) estimate.FederalIncomeTax = 5426 + (taxableIncome - 47150) * 0.22m;
+            else estimate.FederalIncomeTax = 17168.50m + (taxableIncome - 100525) * 0.24m;
+        }
+        
+        // Simplified state tax (4% flat)
+        estimate.StateIncomeTax = estimate.AdjustedGrossIncome * 0.04m;
+        
+        return estimate;
+    }
+
+    private async Task<TaxDeductionSummary> GenerateDeductionsSummaryAsync(DateTime startDate, DateTime endDate)
+    {
+        var expenses = await UnitOfWork.Expenses.GetQueryable()
+            .Where(e => e.ExpenseDate >= startDate && e.ExpenseDate <= endDate)
+            .ToListAsync();
+        
+        var deductions = new TaxDeductionSummary
+        {
+            Year = _selectedYear,
+            Quarter = _selectedQuarter
+        };
+        
+        // Map expenses to tax categories
+        foreach (var expense in expenses)
+        {
+            switch (expense.Category)
+            {
+                case Core.Enums.ExpenseCategory.Fuel:
+                    deductions.FuelExpenses += expense.Amount;
+                    break;
+                case Core.Enums.ExpenseCategory.Maintenance:
+                    deductions.MaintenanceAndRepairs += expense.Amount;
+                    break;
+                case Core.Enums.ExpenseCategory.Insurance:
+                    deductions.Insurance += expense.Amount;
+                    break;
+                case Core.Enums.ExpenseCategory.Tolls:
+                    deductions.TollsAndParking += expense.Amount;
+                    break;
+                case Core.Enums.ExpenseCategory.Tires:
+                    deductions.Tires += expense.Amount;
+                    break;
+                default:
+                    deductions.OtherExpenses += expense.Amount;
+                    break;
+            }
+        }
+        
+        return deductions;
+    }
+
+    private async Task<IFTAQuarterlyReport?> GenerateIFTASummaryAsync(DateTime startDate, DateTime endDate)
+    {
+        try
+        {
+            // Get fuel entries for the quarter
+            var fuelEntries = await UnitOfWork.FuelEntries.GetQueryable()
+                .Where(f => f.FuelDate >= startDate && f.FuelDate <= endDate)
+                .ToListAsync();
+            
+            if (!fuelEntries.Any()) return null;
+            
+            var report = new IFTAQuarterlyReport
+            {
+                Year = _selectedYear,
+                Quarter = _selectedQuarter,
+                StartDate = startDate,
+                EndDate = endDate
+            };
+            
+            // Group by state and calculate
+            var byState = fuelEntries.GroupBy(f => f.State ?? "Unknown");
+            
+            foreach (var stateGroup in byState)
+            {
+                var stateData = new IFTAStateData
+                {
+                    State = stateGroup.Key,
+                    GallonsPurchased = stateGroup.Sum(f => f.Gallons),
+                    MilesDriven = 0, // Would need to calculate from loads
+                    FleetMPG = report.FleetMPG
+                };
+                
+                report.StateData.Add(stateData);
+            }
+            
+            return report;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private void PrintReport()
+    {
+        Snackbar.Add("Print functionality coming soon", Severity.Info);
+    }
+
+    private async Task ExportToPDFAsync()
+    {
+        try
+        {
+            if (_taxEstimate == null) return;
+            
+            var pdfBytes = await PdfService.GenerateTaxReportAsync(_taxEstimate, _deductions, _companySettings);
+            
+            var fileName = $"TaxSummary_Q{_selectedQuarter}_{_selectedYear}.pdf";
+            Snackbar.Add("PDF generated successfully", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error generating PDF: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+    }
+    
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+}

@@ -1,0 +1,680 @@
+@page "/fuel/add"
+@page "/fuel/edit/{EntryId:guid}"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+@inject IGeolocationService GeolocationService
+
+<PageTitle>@(_isNew ? "Add Fuel Entry" : "Edit Fuel Entry") - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.LocalGasStation" Class="mr-2" />
+    @(_isNew ? "Add Fuel Entry" : "Edit Fuel Entry")
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudCard Elevation="3">
+        <MudCardContent>
+            <MudForm @ref="_form" @bind-IsValid="@_formValid">
+                <MudGrid>
+                    <!-- AUTO-LOCATION FEATURE - PROMINENT PLACEMENT -->
+                    @if (_isNew)
+                    {
+                        <MudItem xs="12">
+                            <MudCard Elevation="4" Class="location-card">
+                                <MudCardContent>
+                                    <MudStack Spacing="2">
+                                        <MudText Typo="Typo.h6" Color="Color.Primary">
+                                            <MudIcon Icon="@Icons.Material.Filled.MyLocation" Class="mr-2" />
+                                            Location
+                                        </MudText>
+                                        
+                                        @if (_locationInfo != null)
+                                        {
+                                            <MudAlert Severity="Severity.Success" Dense="true" Icon="@Icons.Material.Filled.CheckCircle">
+                                                <MudStack Spacing="1">
+                                                    <MudText Typo="Typo.body1">
+                                                        <strong>📍 Located: @_locationInfo.City, @_locationInfo.State</strong>
+                                                    </MudText>
+                                                    <MudText Typo="Typo.caption">
+                                                        Accuracy: @(_locationInfo.Accuracy?.ToString("N0") ?? "N/A")m • 
+                                                        Source: @_locationInfo.Source
+                                                        • @_locationInfo.Latitude.ToString("N6"), @_locationInfo.Longitude.ToString("N6")
+                                                    </MudText>
+                                                </MudStack>
+                                            </MudAlert>
+                                        }
+                                        else if (_locationError)
+                                        {
+                                            <MudAlert Severity="Severity.Warning" Dense="true">
+                                                Unable to get location. Please enter manually or try again.
+                                            </MudAlert>
+                                        }
+                                        
+                                        <MudStack Row="true" Spacing="2">
+                                            <MudButton Variant="Variant.Filled" 
+                                                      Color="Color.Success" 
+                                                      StartIcon="@Icons.Material.Filled.MyLocation"
+                                                      Size="Size.Large"
+                                                      OnClick="GetCurrentLocationAsync"
+                                                      Disabled="@_gettingLocation">
+                                                @if (_gettingLocation)
+                                                {
+                                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                                    <text>Getting Location...</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>Use Current Location</text>
+                                                }
+                                            </MudButton>
+                                            
+                                            @if (_locationInfo != null)
+                                            {
+                                                <MudButton Variant="Variant.Outlined" 
+                                                          Color="Color.Default" 
+                                                          StartIcon="@Icons.Material.Filled.Edit"
+                                                          OnClick="@(() => _manualLocationMode = !_manualLocationMode)">
+                                                    @(_manualLocationMode ? "Use Auto Location" : "Edit Manually")
+                                                </MudButton>
+                                            }
+                                        </MudStack>
+                                    </MudStack>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    }
+                    
+                    <MudItem xs="12" md="6">
+                        <TruckSelector SelectedTruckId="@_fuelEntry.TruckId"
+                                      SelectedTruckIdChanged="@UpdateTruckId"
+                                      Label="Truck"
+                                      Required="true"
+                                      FilterStatus="TruckStatus.Active" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudDatePicker Date="@_fuelDate"
+                                      DateChanged="@((DateTime? date) => _fuelDate = date ?? DateTime.Now)"
+                                      Label="Fuel Date" 
+                                      Required="true"
+                                      Variant="Variant.Outlined" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudNumericField @bind-Value="_fuelEntry.Odometer" 
+                                        Label="Odometer Reading" 
+                                        Required="true"
+                                        Adornment="Adornment.End"
+                                        AdornmentText="miles"
+                                        Min="0"
+                                        Variant="Variant.Outlined"
+                                        HelperText="@_odometerHelper" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudSelect @bind-Value="_fuelEntry.FuelType" 
+                                  Label="Fuel Type" 
+                                  T="FuelType"
+                                  Variant="Variant.Outlined"
+                                  Required="true">
+                            <MudSelectItem Value="@FuelType.Diesel">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning">Diesel</MudChip>
+                            </MudSelectItem>
+                            <MudSelectItem Value="@FuelType.DEF">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info">DEF</MudChip>
+                            </MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudNumericField Value="@_fuelEntry.Gallons"
+                                        ValueChanged="@((decimal value) => { _fuelEntry.Gallons = value; CalculateTotal(); })"
+                                        Label="Gallons" 
+                                        Required="true"
+                                        Adornment="Adornment.End"
+                                        AdornmentText="gal"
+                                        Format="N3"
+                                        Min="0"
+                                        Variant="Variant.Outlined" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudNumericField Value="@_fuelEntry.PricePerGallon"
+                                        ValueChanged="@((decimal value) => { _fuelEntry.PricePerGallon = value; CalculateTotal(); })"
+                                        Label="Price Per Gallon" 
+                                        Required="true"
+                                        Adornment="Adornment.Start"
+                                        AdornmentText="$"
+                                        Format="N3"
+                                        Min="0"
+                                        Variant="Variant.Outlined" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudNumericField @bind-Value="_fuelEntry.TotalCost" 
+                                        Label="Total Cost" 
+                                        Required="true"
+                                        Adornment="Adornment.Start"
+                                        AdornmentText="$"
+                                        Format="N2"
+                                        Min="0"
+                                        Variant="Variant.Outlined"
+                                        HelperText="Auto-calculated (editable)" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudAutocomplete T="string" 
+                                        @bind-Value="_fuelEntry.TruckStop"
+                                        Label="Truck Stop / Vendor" 
+                                        SearchFunc="@SearchTruckStops"
+                                        Variant="Variant.Outlined"
+                                        ResetValueOnEmptyText="false"
+                                        CoerceText="true" />
+                    </MudItem>
+                    
+                    <!-- Location Fields - Auto-filled or Manual -->
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_fuelEntry.City" 
+                                     Label="City" 
+                                     Variant="Variant.Outlined"
+                                     Disabled="@(!_manualLocationMode && _locationInfo != null)"
+                                     Required="true" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_fuelEntry.State" 
+                                     Label="State" 
+                                     Variant="Variant.Outlined"
+                                     Disabled="@(!_manualLocationMode && _locationInfo != null)"
+                                     Required="true"
+                                     MaxLength="2"
+                                     HelperText="2-letter state code" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_fuelEntry.FuelCardLast4" 
+                                     Label="Fuel Card Last 4 Digits" 
+                                     Variant="Variant.Outlined"
+                                     MaxLength="4" />
+                    </MudItem>
+                    
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_fuelEntry.Notes" 
+                                     Label="Notes" 
+                                     Lines="2"
+                                     Variant="Variant.Outlined" />
+                    </MudItem>
+                    
+                    <!-- Receipt Image -->
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.h6" Class="mb-2">Receipt Image</MudText>
+                        
+                        @if (_fuelEntry.ReceiptImage != null && _fuelEntry.ReceiptImage.Length > 0)
+                        {
+                            <MudCard Elevation="2" Class="mb-3">
+                                <MudCardContent>
+                                    <MudImage Src="@GetImageDataUrl(_fuelEntry.ReceiptImage)" 
+                                             Alt="Receipt" 
+                                             Elevation="0" 
+                                             Class="rounded"
+                                             Style="max-width: 100%; max-height: 400px; object-fit: contain;" />
+                                    <MudButton Variant="Variant.Text" 
+                                              Color="Color.Error" 
+                                              StartIcon="@Icons.Material.Filled.Delete"
+                                              OnClick="@(() => _fuelEntry.ReceiptImage = null)"
+                                              Class="mt-2">
+                                        Remove Image
+                                    </MudButton>
+                                </MudCardContent>
+                            </MudCard>
+                        }
+                        else
+                        {
+                            <MudStack Row="true" Spacing="2">
+                                <MudFileUpload T="IBrowserFile" 
+                                              Accept="image/*" 
+                                              OnFilesChanged="OnFileSelected"
+                                              MaximumFileCount="1">
+                                    <ActivatorContent>
+                                        <MudButton Variant="Variant.Filled"
+                                                  Color="Color.Primary"
+                                                  StartIcon="@Icons.Material.Filled.Upload">
+                                            Upload Receipt
+                                        </MudButton>
+                                    </ActivatorContent>
+                                </MudFileUpload>
+                                
+                                <MudButton Variant="Variant.Filled" 
+                                          Color="Color.Secondary" 
+                                          StartIcon="@Icons.Material.Filled.CameraAlt"
+                                          OnClick="CapturePhoto">
+                                    Take Photo
+                                </MudButton>
+                            </MudStack>
+                        }
+                    </MudItem>
+                </MudGrid>
+            </MudForm>
+        </MudCardContent>
+        
+        <MudCardActions>
+            <MudStack Row="true" Spacing="3" Class="pa-4">
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Primary" 
+                          StartIcon="@Icons.Material.Filled.Save"
+                          Disabled="@(!_formValid)"
+                          OnClick="SaveAsync">
+                    Save
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Default"
+                          OnClick="Cancel">
+                    Cancel
+                </MudButton>
+                @if (!_isNew)
+                {
+                    <MudSpacer />
+                    <MudButton Variant="Variant.Filled" 
+                              Color="Color.Error" 
+                              StartIcon="@Icons.Material.Filled.Delete"
+                              OnClick="DeleteAsync">
+                        Delete
+                    </MudButton>
+                }
+            </MudStack>
+        </MudCardActions>
+    </MudCard>
+}
+
+@code {
+    [Parameter]
+    public Guid? EntryId { get; set; }
+
+    private FuelEntry _fuelEntry = new();
+    private DateTime? _fuelDate;
+    private MudForm _form = null!;
+    private bool _formValid = false;
+    private bool _loading = false;
+    private bool _isNew => !EntryId.HasValue;
+    
+    // Location
+    private LocationInfo? _locationInfo;
+    private bool _gettingLocation = false;
+    private bool _locationError = false;
+    private bool _manualLocationMode = false;
+    
+    // Autocomplete
+    private List<string> _truckStopSuggestions = new();
+    
+    // Validation
+    private string _odometerHelper = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check for query string parameters
+        var uri = new Uri(NavigationManager.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        
+        if (query["truckId"] != null)
+        {
+            _fuelEntry.TruckId = query["truckId"];
+        }
+        
+        await LoadTruckStopSuggestionsAsync();
+        
+        if (!_isNew && EntryId.HasValue)
+        {
+            await LoadFuelEntryAsync();
+        }
+        else
+        {
+            _fuelEntry = new FuelEntry
+            {
+                FuelDate = DateTime.Now,
+                FuelType = FuelType.Diesel
+            };
+            _fuelDate = DateTime.Now;
+            
+            // Auto-get location on load for new entries
+            await GetCurrentLocationAsync();
+        }
+    }
+
+    private async Task LoadFuelEntryAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            var entry = await UnitOfWork.FuelEntries.GetQueryable()
+                .FirstOrDefaultAsync(f => f.FuelEntryId == EntryId);
+            
+            if (entry != null)
+            {
+                _fuelEntry = entry;
+                _fuelDate = entry.FuelDate;
+                
+                // If entry has GPS coordinates, recreate LocationInfo
+                if (entry.Latitude.HasValue && entry.Longitude.HasValue)
+                {
+                    _locationInfo = new LocationInfo
+                    {
+                        City = entry.City ?? "",
+                        State = entry.State ?? "",
+                        Latitude = entry.Latitude.Value,
+                        Longitude = entry.Longitude.Value,
+                        Source = LocationSource.Cached
+                    };
+                }
+            }
+            else
+            {
+                Snackbar.Add("Fuel entry not found", Severity.Error);
+                NavigationManager.NavigateTo("/fuel");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading fuel entry: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task GetCurrentLocationAsync()
+    {
+        try
+        {
+            _gettingLocation = true;
+            _locationError = false;
+            StateHasChanged();
+            
+            _locationInfo = await GeolocationService.GetCurrentLocationAsync();
+            
+            if (_locationInfo != null)
+            {
+                // Auto-fill location fields
+                _fuelEntry.City = _locationInfo.City;
+                _fuelEntry.State = _locationInfo.State;
+                _fuelEntry.Latitude = _locationInfo.Latitude;
+                _fuelEntry.Longitude = _locationInfo.Longitude;
+                
+                Snackbar.Add($"Location found: {_locationInfo.City}, {_locationInfo.State}", 
+                    Severity.Success, 
+                    config => { config.Icon = Icons.Material.Filled.LocationOn; });
+            }
+            else
+            {
+                _locationError = true;
+                Snackbar.Add("Unable to get location. Please enter manually.", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            _locationError = true;
+            Snackbar.Add($"Location error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _gettingLocation = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task UpdateTruckId(string? truckId)
+    {
+        _fuelEntry.TruckId = truckId ?? "";
+        
+        // Get last odometer reading for this truck
+        if (!string.IsNullOrEmpty(truckId))
+        {
+            var lastEntry = await UnitOfWork.FuelEntries.GetQueryable()
+                .Where(f => f.TruckId == truckId)
+                .OrderByDescending(f => f.Odometer)
+                .FirstOrDefaultAsync();
+            
+            if (lastEntry != null)
+            {
+                _odometerHelper = $"Last entry: {lastEntry.Odometer:N0} miles";
+                
+                // Pre-fill with last odometer (user can adjust)
+                if (_isNew && _fuelEntry.Odometer == 0)
+                {
+                    _fuelEntry.Odometer = lastEntry.Odometer;
+                }
+            }
+        }
+    }
+
+    private async Task LoadTruckStopSuggestionsAsync()
+    {
+        try
+        {
+            _truckStopSuggestions = await UnitOfWork.FuelEntries.GetQueryable()
+                .Where(f => !string.IsNullOrEmpty(f.TruckStop))
+                .Select(f => f.TruckStop!)
+                .Distinct()
+                .OrderBy(t => t)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading truck stops: {ex.Message}");
+        }
+    }
+
+    private async Task<IEnumerable<string>> SearchTruckStops(string value, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return _truckStopSuggestions;
+        
+        return _truckStopSuggestions
+            .Where(t => t.Contains(value, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private void CalculateTotal()
+    {
+        _fuelEntry.TotalCost = _fuelEntry.Gallons * _fuelEntry.PricePerGallon;
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file != null)
+            {
+                const long maxFileSize = 5 * 1024 * 1024; // 5MB
+                
+                if (file.Size > maxFileSize)
+                {
+                    Snackbar.Add("File size must be less than 5MB", Severity.Error);
+                    return;
+                }
+                
+                using var ms = new MemoryStream();
+                await file.OpenReadStream(maxFileSize).CopyToAsync(ms);
+                _fuelEntry.ReceiptImage = ms.ToArray();
+                
+                Snackbar.Add("Receipt uploaded successfully", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error uploading receipt: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CapturePhoto()
+    {
+        try
+        {
+            // MAUI camera capture
+            if (MediaPicker.Default.IsCaptureSupported)
+            {
+                var photo = await MediaPicker.Default.CapturePhotoAsync(new MediaPickerOptions
+                {
+                    Title = "Capture fuel receipt"
+                });
+                
+                if (photo != null)
+                {
+                    using var stream = await photo.OpenReadAsync();
+                    using var ms = new MemoryStream();
+                    await stream.CopyToAsync(ms);
+                    _fuelEntry.ReceiptImage = ms.ToArray();
+                    
+                    Snackbar.Add("Photo captured successfully", Severity.Success);
+                }
+            }
+            else
+            {
+                Snackbar.Add("Camera not supported on this device", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error capturing photo: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string GetImageDataUrl(byte[] imageData)
+    {
+        if (imageData == null || imageData.Length == 0)
+            return "";
+        
+        return $"data:image/jpeg;base64,{Convert.ToBase64String(imageData)}";
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await _form.Validate();
+            
+            if (!_formValid)
+            {
+                Snackbar.Add("Please fix validation errors", Severity.Error);
+                return;
+            }
+            
+            // Validate odometer
+            if (!await ValidateOdometerAsync())
+            {
+                return;
+            }
+            
+            // Set the fuel date
+            if (_fuelDate.HasValue)
+            {
+                _fuelEntry.FuelDate = _fuelDate.Value;
+            }
+            
+            // Calculate IFTA quarter
+            var quarter = ((_fuelEntry.FuelDate.Month - 1) / 3) + 1;
+            _fuelEntry.IFTA_Quarter = $"{_fuelEntry.FuelDate.Year}-Q{quarter}";
+            
+            if (_isNew)
+            {
+                await UnitOfWork.FuelEntries.AddAsync(_fuelEntry);
+                
+                // Update truck odometer
+                await UpdateTruckOdometerAsync();
+            }
+            else
+            {
+                await UnitOfWork.FuelEntries.UpdateAsync(_fuelEntry);
+            }
+            
+            await UnitOfWork.SaveChangesAsync();
+            
+            Snackbar.Add($"Fuel entry {(_isNew ? "added" : "updated")} successfully", Severity.Success);
+            NavigationManager.NavigateTo("/fuel");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving fuel entry: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task<bool> ValidateOdometerAsync()
+    {
+        if (string.IsNullOrEmpty(_fuelEntry.TruckId))
+        {
+            Snackbar.Add("Please select a truck", Severity.Error);
+            return false;
+        }
+        
+        // Check if odometer is greater than last entry
+        var lastEntry = await UnitOfWork.FuelEntries.GetQueryable()
+            .Where(f => f.TruckId == _fuelEntry.TruckId && f.FuelEntryId != _fuelEntry.FuelEntryId)
+            .OrderByDescending(f => f.Odometer)
+            .FirstOrDefaultAsync();
+        
+        if (lastEntry != null && _fuelEntry.Odometer <= lastEntry.Odometer)
+        {
+            Snackbar.Add($"Odometer must be greater than last entry ({lastEntry.Odometer:N0} miles)", 
+                Severity.Error);
+            return false;
+        }
+        
+        return true;
+    }
+
+    private async Task UpdateTruckOdometerAsync()
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(_fuelEntry.TruckId))
+            {
+                var truck = await UnitOfWork.Trucks.GetQueryable()
+                    .FirstOrDefaultAsync(t => t.TruckId == _fuelEntry.TruckId);
+                
+                if (truck != null && _fuelEntry.Odometer > truck.CurrentOdometer)
+                {
+                    truck.CurrentOdometer = _fuelEntry.Odometer;
+                    await UnitOfWork.Trucks.UpdateAsync(truck);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating truck odometer: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        try
+        {
+            await UnitOfWork.FuelEntries.DeleteAsync(_fuelEntry);
+            await UnitOfWork.SaveChangesAsync();
+            
+            Snackbar.Add("Fuel entry deleted successfully", Severity.Success);
+            NavigationManager.NavigateTo("/fuel");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting fuel entry: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/fuel");
+    }
+}

@@ -1,0 +1,370 @@
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject IUnitOfWork UnitOfWork
+@inject ISnackbar Snackbar
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <!-- Summary Cards by Category -->
+        <MudItem xs="12">
+            <MudText Typo="Typo.h6" Class="mb-3">
+                <MudIcon Icon="@Icons.Material.Filled.Category" Class="mr-2" />
+                Expense Summary
+                @if (StartDate.HasValue && EndDate.HasValue)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-2">
+                        @StartDate.Value.ToString("MM/dd/yyyy") - @EndDate.Value.ToString("MM/dd/yyyy")
+                    </MudChip>
+                }
+            </MudText>
+        </MudItem>
+        
+        <!-- Total Card -->
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Total Expenses</MudText>
+                            <MudText Typo="Typo.h4" Color="Color.Error">@_totalExpenses.ToString("C0")</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @_expenseCount transactions
+                            </MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Large" Color="Color.Error" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Top Categories -->
+        @foreach (var category in _categorySummaries.Take(3))
+        {
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <MudStack Spacing="1">
+                            <MudChip T="string" Size="Size.Small" Color="@GetCategoryColor(category.Category)">
+                                @category.Category
+                            </MudChip>
+                            <MudText Typo="Typo.h5">@category.Total.ToString("C0")</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @category.Count transactions • @category.Percentage.ToString("N1")%
+                            </MudText>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        }
+        
+        <!-- Chart: Expenses Over Time -->
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.Timeline" Class="mr-2" />
+                            Expenses Over Time
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_expensesTrendData.Any())
+                    {
+                        <MudChart ChartType="ChartType.Line" 
+                                 ChartSeries="@_expensesTrendSeries" 
+                                 XAxisLabels="@_expensesTrendLabels"
+                                 Width="100%" 
+                                 Height="300px" />
+                    }
+                    else
+                    {
+                        <MudText Align="Align.Center" Class="pa-4">No data available</MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Chart: Category Breakdown -->
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.PieChart" Class="mr-2" />
+                            By Category
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_categoryBreakdownData.Any())
+                    {
+                        <MudChart T="double" 
+                                 ChartType="ChartType.Donut" 
+                                 InputData="@_categoryBreakdownData" 
+                                 InputLabels="@_categoryBreakdownLabels"
+                                 Width="100%" 
+                                 Height="280px" />
+                    }
+                    else
+                    {
+                        <MudText Align="Align.Center" Class="pa-4">No expenses</MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Category Details Table -->
+        <MudItem xs="12">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Detailed Breakdown</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudSimpleTable Dense="true" Hover="true">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th class="text-right">Count</th>
+                                <th class="text-right">Total</th>
+                                <th class="text-right">Average</th>
+                                <th class="text-right">% of Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var category in _categorySummaries.OrderByDescending(c => c.Total))
+                            {
+                                <tr>
+                                    <td>
+                                        <MudChip T="string" Size="Size.Small" Color="@GetCategoryColor(category.Category)">
+                                            @category.Category
+                                        </MudChip>
+                                    </td>
+                                    <td class="text-right">@category.Count</td>
+                                    <td class="text-right">@category.Total.ToString("C2")</td>
+                                    <td class="text-right">@category.Average.ToString("C2")</td>
+                                    <td class="text-right">@category.Percentage.ToString("N1")%</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr style="font-weight: bold; border-top: 2px solid;">
+                                <td>TOTAL</td>
+                                <td class="text-right">@_expenseCount</td>
+                                <td class="text-right">@_totalExpenses.ToString("C2")</td>
+                                <td class="text-right">@(_expenseCount > 0 ? (_totalExpenses / _expenseCount).ToString("C2") : "-")</td>
+                                <td class="text-right">100.0%</td>
+                            </tr>
+                        </tfoot>
+                    </MudSimpleTable>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public DateTime? StartDate { get; set; }
+    
+    [Parameter]
+    public DateTime? EndDate { get; set; }
+    
+    [Parameter]
+    public string? TruckId { get; set; }
+    
+    [Parameter]
+    public ExpenseCategory? FilterCategory { get; set; }
+
+    private bool _loading = true;
+    private List<Expense> _expenses = new();
+    private decimal _totalExpenses = 0;
+    private int _expenseCount = 0;
+    
+    // Category summaries
+    private List<CategorySummary> _categorySummaries = new();
+    
+    // Charts
+    private List<ChartSeries<double>> _expensesTrendSeries = new();
+    private string[] _expensesTrendLabels = Array.Empty<string>();
+    private List<ExpenseTrendPoint> _expensesTrendData = new();
+    
+    private double[] _categoryBreakdownData = Array.Empty<double>();
+    private string[] _categoryBreakdownLabels = Array.Empty<string>();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadSummaryDataAsync();
+    }
+
+    private async Task LoadSummaryDataAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            // Build query
+            var query = UnitOfWork.Expenses.GetQueryable();
+            
+            if (StartDate.HasValue)
+            {
+                query = query.Where(e => e.ExpenseDate >= StartDate.Value);
+            }
+            if (EndDate.HasValue)
+            {
+                query = query.Where(e => e.ExpenseDate <= EndDate.Value.AddDays(1));
+            }
+            if (!string.IsNullOrEmpty(TruckId))
+            {
+                query = query.Where(e => e.TruckId == TruckId);
+            }
+            if (FilterCategory.HasValue)
+            {
+                query = query.Where(e => e.Category == FilterCategory.Value);
+            }
+            
+            _expenses = await query.ToListAsync();
+            
+            // Calculate summaries
+            _totalExpenses = _expenses.Sum(e => e.Amount);
+            _expenseCount = _expenses.Count;
+            
+            CalculateCategorySummaries();
+            CalculateTrendData();
+            
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading summary: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void CalculateCategorySummaries()
+    {
+        _categorySummaries = _expenses
+            .GroupBy(e => e.Category)
+            .Select(g => new CategorySummary
+            {
+                Category = g.Key,
+                Total = g.Sum(e => e.Amount),
+                Count = g.Count(),
+                Average = g.Average(e => e.Amount),
+                Percentage = _totalExpenses > 0 ? (g.Sum(e => e.Amount) / _totalExpenses * 100) : 0
+            })
+            .OrderByDescending(c => c.Total)
+            .ToList();
+        
+        // Prepare category breakdown chart data
+        var topCategories = _categorySummaries.Take(6).ToList();
+        _categoryBreakdownData = topCategories.Select(c => (double)c.Total).ToArray();
+        _categoryBreakdownLabels = topCategories.Select(c => c.Category.ToString()).ToArray();
+    }
+
+    private void CalculateTrendData()
+    {
+        if (!_expenses.Any()) return;
+        
+        // Group by day or week depending on date range
+        var dateRange = (EndDate ?? DateTime.Now) - (StartDate ?? _expenses.Min(e => e.ExpenseDate));
+        var groupByDay = dateRange.TotalDays <= 31;
+        
+        var trendData = new List<double>();
+        var labels = new List<string>();
+        
+        if (groupByDay)
+        {
+            // Group by day
+            var dailyExpenses = _expenses
+                .GroupBy(e => e.ExpenseDate.Date)
+                .OrderBy(g => g.Key)
+                .ToList();
+            
+            foreach (var day in dailyExpenses)
+            {
+                trendData.Add((double)day.Sum(e => e.Amount));
+                labels.Add(day.Key.ToString("MM/dd"));
+                
+                _expensesTrendData.Add(new ExpenseTrendPoint
+                {
+                    Date = day.Key,
+                    Amount = day.Sum(e => e.Amount)
+                });
+            }
+        }
+        else
+        {
+            // Group by week
+            var weeklyExpenses = _expenses
+                .GroupBy(e => new { Year = e.ExpenseDate.Year, Week = GetWeekOfYear(e.ExpenseDate) })
+                .OrderBy(g => g.Key.Year)
+                .ThenBy(g => g.Key.Week)
+                .ToList();
+            
+            foreach (var week in weeklyExpenses)
+            {
+                trendData.Add((double)week.Sum(e => e.Amount));
+                labels.Add($"Wk {week.Key.Week}");
+            }
+        }
+        
+        _expensesTrendSeries = new List<ChartSeries<double>>
+        {
+            new ChartSeries<double> { Name = "Expenses", Data = trendData.ToArray() }
+        };
+        _expensesTrendLabels = labels.ToArray();
+    }
+
+    private int GetWeekOfYear(DateTime date)
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        return culture.Calendar.GetWeekOfYear(date, 
+            System.Globalization.CalendarWeekRule.FirstDay, 
+            DayOfWeek.Sunday);
+    }
+
+    private Color GetCategoryColor(ExpenseCategory category)
+    {
+        return category switch
+        {
+            ExpenseCategory.Fuel => Color.Warning,
+            ExpenseCategory.Maintenance => Color.Info,
+            ExpenseCategory.Insurance => Color.Primary,
+            ExpenseCategory.Permits => Color.Secondary,
+            ExpenseCategory.Tolls => Color.Default,
+            ExpenseCategory.DriverPay => Color.Success,
+            ExpenseCategory.TruckPayment => Color.Error,
+            ExpenseCategory.Tires => Color.Info,
+            _ => Color.Default
+        };
+    }
+
+    // DTOs
+    private class CategorySummary
+    {
+        public ExpenseCategory Category { get; set; }
+        public decimal Total { get; set; }
+        public int Count { get; set; }
+        public decimal Average { get; set; }
+        public decimal Percentage { get; set; }
+    }
+
+    private class ExpenseTrendPoint
+    {
+        public DateTime Date { get; set; }
+        public decimal Amount { get; set; }
+    }
+}

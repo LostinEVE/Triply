@@ -1,0 +1,44 @@
+@namespace Triply.Components.Shared
+@using MudBlazor
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Confirm Action</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText>@ContentText</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => HandleCancel())">Cancel</MudButton>
+        <MudButton Color="@Color" Variant="Variant.Filled" OnClick="@(() => HandleConfirm())">@ButtonText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter] 
+    public string ContentText { get; set; } = "";
+
+    [Parameter] 
+    public string ButtonText { get; set; } = "OK";
+
+    [Parameter] 
+    public Color Color { get; set; } = Color.Primary;
+
+    [Parameter]
+    public EventCallback OnConfirm { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private async Task HandleConfirm()
+    {
+        if (OnConfirm.HasDelegate)
+            await OnConfirm.InvokeAsync();
+    }
+
+    private async Task HandleCancel()
+    {
+        if (OnCancel.HasDelegate)
+            await OnCancel.InvokeAsync();
+    }
+}

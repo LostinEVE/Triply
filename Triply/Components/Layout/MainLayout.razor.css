@@ -1,0 +1,276 @@
+/* ============================================
+   Triply Main Layout Styles
+   Professional trucking management app styling
+   ============================================ */
+
+/* Quick Actions Menu (Mobile FAB Overlay) */
+.quick-actions-menu {
+    min-width: 250px;
+    max-width: 90vw;
+}
+
+/* App Bar Styling */
+::deep .mud-appbar {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+::deep .mud-appbar-dense {
+    min-height: 56px !important;
+}
+
+/* Drawer Header Styling */
+::deep .mud-drawer-header {
+    border-bottom: 1px solid rgba(0,0,0,0.12);
+}
+
+/* Main Content Area */
+::deep .mud-main-content {
+    min-height: calc(100vh - 56px);
+    background-color: var(--mud-palette-background);
+}
+
+/* Mobile Bottom Navigation Padding */
+@media (max-width: 960px) {
+    ::deep .mud-main-content {
+        padding-bottom: 80px !important;
+    }
+}
+
+/* Container Responsive Padding */
+@media (max-width: 600px) {
+    ::deep .mud-container {
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+    }
+}
+
+/* ============================================
+   Scrollbar Styling
+   ============================================ */
+
+/* Custom Scrollbar for Drawer (Light Mode) */
+::deep .mud-drawer::-webkit-scrollbar {
+    width: 6px;
+}
+
+::deep .mud-drawer::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::deep .mud-drawer::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.2);
+    border-radius: 3px;
+}
+
+::deep .mud-drawer::-webkit-scrollbar-thumb:hover {
+    background: rgba(0,0,0,0.3);
+}
+
+/* Dark Mode Scrollbar */
+::deep .mud-theme-dark .mud-drawer::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.2);
+}
+
+::deep .mud-theme-dark .mud-drawer::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+/* ============================================
+   Animations & Transitions
+   ============================================ */
+
+/* Smooth Drawer Transitions */
+::deep .mud-drawer {
+    transition: width 0.3s ease, transform 0.3s ease;
+}
+
+::deep .mud-main-content {
+    transition: padding-left 0.3s ease;
+}
+
+/* FAB Pulse Animation */
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(25, 118, 210, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(25, 118, 210, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(25, 118, 210, 0);
+    }
+}
+
+::deep .mud-fab {
+    animation: pulse 2s infinite;
+}
+
+/* Quick Actions Menu Slide Up Animation */
+.quick-actions-menu {
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translate(-50%, 20px);
+        opacity: 0;
+    }
+    to {
+        transform: translate(-50%, 0);
+        opacity: 1;
+    }
+}
+
+/* Overlay Fade Animation */
+::deep .mud-overlay {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* ============================================
+   Component Styling
+   ============================================ */
+
+/* Bottom Navigation Bar */
+::deep .mud-appbar.mud-appbar-fixed-bottom {
+    top: auto !important;
+    bottom: 0 !important;
+    border-top: 1px solid rgba(0,0,0,0.12);
+}
+
+/* Logo/Brand Icon Alignment */
+::deep .mud-appbar .mud-icon-root {
+    vertical-align: middle;
+}
+
+/* Tooltip Styling */
+::deep .mud-tooltip {
+    font-size: 0.875rem;
+}
+
+/* Menu Item Hover Effects */
+::deep .mud-menu-item:hover {
+    background-color: rgba(0, 0, 0, 0.04);
+}
+
+::deep .mud-theme-dark .mud-menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Icon Button Active State */
+::deep .mud-icon-button.mud-ripple:active {
+    transform: scale(0.95);
+}
+
+/* Drawer Shadow When Open */
+::deep .mud-drawer-open {
+    box-shadow: 0 8px 10px -5px rgba(0,0,0,0.2);
+}
+
+/* Mobile Navigation Active Indicator */
+::deep .mud-appbar-fixed-bottom .mud-icon-button {
+    transition: all 0.2s ease;
+}
+
+::deep .mud-appbar-fixed-bottom .mud-icon-button:hover {
+    transform: scale(1.1);
+}
+
+/* Badge Positioning in App Bar */
+::deep .mud-appbar .mud-badge {
+    top: -4px;
+    right: -4px;
+}
+
+/* Breadcrumb Spacing */
+::deep .mud-breadcrumbs {
+    margin-bottom: 1rem;
+}
+
+/* ============================================
+   Responsive Design
+   ============================================ */
+
+/* Container Max Width for Large Screens */
+::deep .mud-container.mud-container-maxwidth-xl {
+    max-width: 1920px;
+}
+
+@media (min-width: 1920px) {
+    ::deep .mud-container.mud-container-maxwidth-xl {
+        max-width: 1680px;
+    }
+}
+
+/* ============================================
+   Print Styles
+   ============================================ */
+
+@media print {
+    /* Hide navigation elements when printing */
+    ::deep .mud-appbar,
+    ::deep .mud-drawer,
+    ::deep .mud-fab,
+    .quick-actions-menu {
+        display: none !important;
+    }
+    
+    /* Remove padding/margins for print */
+    ::deep .mud-main-content {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+}
+
+/* ============================================
+   Accessibility
+   ============================================ */
+
+/* Focus Styles for Keyboard Navigation */
+::deep .mud-icon-button:focus-visible,
+::deep .mud-fab:focus-visible {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: 2px;
+}
+
+/* Reduce Motion for Users with Preferences */
+@media (prefers-reduced-motion: reduce) {
+    ::deep .mud-drawer,
+    ::deep .mud-main-content,
+    ::deep .mud-fab,
+    .quick-actions-menu {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+    ::deep .mud-drawer-header {
+        border-bottom-width: 2px;
+    }
+    
+    ::deep .mud-appbar-fixed-bottom {
+        border-top-width: 2px;
+    }
+}
+
+/* ============================================
+   Z-Index Management
+   ============================================ */
+
+::deep .mud-overlay.mud-overlay-absolute {
+    z-index: 1300;
+}
+
+.quick-actions-menu {
+    z-index: 1400;
+}

@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Triply.Core/Triply.Core.csproj" />
+  <Project Path="Triply.Data/Triply.Data.csproj" />
+  <Project Path="Triply.Services/Triply.Services.csproj" />
+  <Project Path="Triply/Triply.csproj" />
+</Solution>

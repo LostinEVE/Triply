@@ -1,0 +1,67 @@
+/* Location Card - Prominent Styling */
+.location-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+}
+
+::deep .location-card .mud-card-content {
+    padding: 20px !important;
+}
+
+::deep .location-card .mud-text,
+::deep .location-card .mud-icon-root {
+    color: white !important;
+}
+
+::deep .location-card .mud-button {
+    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+}
+
+::deep .location-card .mud-alert {
+    background-color: rgba(255,255,255,0.15);
+    color: white;
+}
+
+::deep .location-card .mud-alert strong {
+    font-size: 1.1rem;
+}
+
+/* Location Button - Extra Prominent */
+::deep .location-card .mud-button-root {
+    padding: 12px 24px;
+    font-size: 1rem;
+}
+
+/* Receipt preview */
+::deep .mud-image {
+    border: 1px solid rgba(0,0,0,0.12);
+}
+
+/* Auto-calculate helper */
+::deep .mud-input-helper-text {
+    font-style: italic;
+}
+
+/* Form spacing */
+::deep .mud-form .mud-grid-item {
+    margin-bottom: 4px;
+}
+
+/* Camera button styling */
+::deep .mud-button-group {
+    width: 100%;
+}
+
+@media (max-width: 600px) {
+    ::deep .mud-button-group .mud-button {
+        flex: 1;
+    }
+}
+
+/* Map preview (future) */
+.map-preview {
+    height: 200px;
+    border-radius: 4px;
+    overflow: hidden;
+}

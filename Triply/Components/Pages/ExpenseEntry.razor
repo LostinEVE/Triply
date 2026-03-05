@@ -1,0 +1,452 @@
+@page "/expenses/add"
+@page "/expenses/edit/{ExpenseId:guid}"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+
+<PageTitle>@(_isNew ? "Add Expense" : "Edit Expense") - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Receipt" Class="mr-2" />
+    @(_isNew ? "Add Expense" : "Edit Expense")
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudCard Elevation="3">
+        <MudCardContent>
+            <MudForm @ref="_form" @bind-IsValid="@_formValid">
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <MudDatePicker Date="@_expenseDate"
+                                      DateChanged="@((DateTime? date) => _expenseDate = date ?? DateTime.Now)"
+                                      Label="Expense Date" 
+                                      Required="true"
+                                      Variant="Variant.Outlined" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudSelect @bind-Value="_expense.Category" 
+                                  Label="Category" 
+                                  T="ExpenseCategory"
+                                  Variant="Variant.Outlined"
+                                  Required="true">
+                            @foreach (ExpenseCategory category in Enum.GetValues(typeof(ExpenseCategory)))
+                            {
+                                <MudSelectItem Value="@category">
+                                    <MudChip T="string" Size="Size.Small" Color="@GetCategoryColor(category)">
+                                        @category
+                                    </MudChip>
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <TruckSelector SelectedTruckId="@_expense.TruckId"
+                                      SelectedTruckIdChanged="@UpdateTruckId"
+                                      Label="Truck (Optional)"
+                                      Clearable="true"
+                                      FilterStatus="TruckStatus.Active" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudAutocomplete T="string" 
+                                        @bind-Value="_expense.Vendor"
+                                        Label="Vendor" 
+                                        SearchFunc="@SearchVendors"
+                                        Variant="Variant.Outlined"
+                                        ResetValueOnEmptyText="false"
+                                        CoerceText="true" />
+                    </MudItem>
+                    
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_expense.Description" 
+                                     Label="Description" 
+                                     Lines="2"
+                                     Variant="Variant.Outlined" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudNumericField @bind-Value="_expense.Amount" 
+                                        Label="Amount" 
+                                        Required="true"
+                                        Adornment="Adornment.Start"
+                                        AdornmentText="$"
+                                        Format="N2"
+                                        Min="0"
+                                        Variant="Variant.Outlined" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudSelect @bind-Value="_expense.PaymentMethod" 
+                                  Label="Payment Method" 
+                                  T="PaymentMethod"
+                                  Variant="Variant.Outlined"
+                                  Required="true">
+                            @foreach (PaymentMethod method in Enum.GetValues(typeof(PaymentMethod)))
+                            {
+                                <MudSelectItem Value="@method">@method</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    
+                    <MudItem xs="12">
+                        <MudSwitch @bind-Value="_expense.IsDeductible" 
+                                  Label="Tax Deductible" 
+                                  Color="Color.Success" />
+                    </MudItem>
+                    
+                    @if (_expense.IsDeductible)
+                    {
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_expense.TaxCategory" 
+                                         Label="Tax Category" 
+                                         Variant="Variant.Outlined"
+                                         HelperText="IRS Schedule C category" />
+                        </MudItem>
+                    }
+                    
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_expense.Notes" 
+                                     Label="Notes" 
+                                     Lines="3"
+                                     Variant="Variant.Outlined" />
+                    </MudItem>
+                    
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.h6" Class="mb-2">Receipt Image</MudText>
+                        
+                        @if (_expense.ReceiptImage != null && _expense.ReceiptImage.Length > 0)
+                        {
+                            <MudCard Elevation="2" Class="mb-3">
+                                <MudCardContent>
+                                    <MudImage Src="@GetImageDataUrl(_expense.ReceiptImage)" 
+                                             Alt="Receipt" 
+                                             Elevation="0" 
+                                             Class="rounded"
+                                             Style="max-width: 100%; max-height: 400px; object-fit: contain;" />
+                                    <MudButton Variant="Variant.Text" 
+                                              Color="Color.Error" 
+                                              StartIcon="@Icons.Material.Filled.Delete"
+                                              OnClick="@(() => _expense.ReceiptImage = null)"
+                                              Class="mt-2">
+                                        Remove Image
+                                    </MudButton>
+                                </MudCardContent>
+                            </MudCard>
+                        }
+                        else
+                        {
+                            <MudStack Row="true" Spacing="2">
+                                <MudFileUpload T="IBrowserFile" 
+                                              Accept="image/*" 
+                                              OnFilesChanged="OnFileSelected"
+                                              MaximumFileCount="1">
+                                    <ActivatorContent>
+                                        <MudButton Variant="Variant.Filled"
+                                                  Color="Color.Primary"
+                                                  StartIcon="@Icons.Material.Filled.Upload">
+                                            Upload Receipt
+                                        </MudButton>
+                                    </ActivatorContent>
+                                </MudFileUpload>
+                                
+                                @if (IsMobile)
+                                {
+                                    <MudButton Variant="Variant.Filled" 
+                                              Color="Color.Secondary" 
+                                              StartIcon="@Icons.Material.Filled.CameraAlt"
+                                              OnClick="CapturePhoto">
+                                        Take Photo
+                                    </MudButton>
+                                }
+                            </MudStack>
+                        }
+                    </MudItem>
+                </MudGrid>
+            </MudForm>
+        </MudCardContent>
+        
+        <MudCardActions>
+            <MudStack Row="true" Spacing="3" Class="pa-4">
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Primary" 
+                          StartIcon="@Icons.Material.Filled.Save"
+                          Disabled="@(!_formValid)"
+                          OnClick="SaveAsync">
+                    Save
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Default"
+                          OnClick="Cancel">
+                    Cancel
+                </MudButton>
+                @if (!_isNew)
+                {
+                    <MudSpacer />
+                    <MudButton Variant="Variant.Filled" 
+                              Color="Color.Error" 
+                              StartIcon="@Icons.Material.Filled.Delete"
+                              OnClick="DeleteAsync">
+                        Delete
+                    </MudButton>
+                }
+            </MudStack>
+        </MudCardActions>
+    </MudCard>
+}
+
+@code {
+    [Parameter]
+    public Guid? ExpenseId { get; set; }
+
+    private Expense _expense = new();
+    private DateTime? _expenseDate;
+    private MudForm _form = null!;
+    private bool _formValid = false;
+    private bool _loading = false;
+    private bool _isNew => !ExpenseId.HasValue;
+
+    private List<string> _vendorSuggestions = new();
+    private bool IsMobile => false; // TODO: Implement mobile detection
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check for query string parameters
+        var uri = new Uri(NavigationManager.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+
+        if (query["truckId"] != null)
+        {
+            _expense.TruckId = query["truckId"];
+        }
+
+        await LoadVendorSuggestionsAsync();
+
+        if (!_isNew && ExpenseId.HasValue)
+        {
+            await LoadExpenseAsync();
+        }
+        else
+        {
+            _expense = new Expense
+            {
+                ExpenseDate = DateTime.Now,
+                PaymentMethod = PaymentMethod.CreditCard,
+                IsDeductible = true
+            };
+            _expenseDate = DateTime.Now;
+        }
+    }
+
+    private async Task LoadExpenseAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            var expense = await UnitOfWork.Expenses.GetQueryable()
+                .FirstOrDefaultAsync(e => e.ExpenseId == ExpenseId);
+            
+            if (expense != null)
+            {
+                _expense = expense;
+                _expenseDate = expense.ExpenseDate;
+            }
+            else
+            {
+                Snackbar.Add("Expense not found", Severity.Error);
+                NavigationManager.NavigateTo("/expenses");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading expense: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadVendorSuggestionsAsync()
+    {
+        try
+        {
+            _vendorSuggestions = await UnitOfWork.Expenses.GetQueryable()
+                .Where(e => !string.IsNullOrEmpty(e.Vendor))
+                .Select(e => e.Vendor!)
+                .Distinct()
+                .OrderBy(v => v)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading vendors: {ex.Message}");
+        }
+    }
+
+    private async Task<IEnumerable<string>> SearchVendors(string value, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return _vendorSuggestions;
+        
+        return _vendorSuggestions
+            .Where(v => v.Contains(value, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file != null)
+            {
+                const long maxFileSize = 5 * 1024 * 1024; // 5MB
+                
+                if (file.Size > maxFileSize)
+                {
+                    Snackbar.Add("File size must be less than 5MB", Severity.Error);
+                    return;
+                }
+                
+                using var ms = new MemoryStream();
+                await file.OpenReadStream(maxFileSize).CopyToAsync(ms);
+                _expense.ReceiptImage = ms.ToArray();
+                
+                Snackbar.Add("Receipt uploaded successfully", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error uploading receipt: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CapturePhoto()
+    {
+        try
+        {
+            // TODO: Implement MAUI camera capture
+            
+            if (MediaPicker.Default.IsCaptureSupported)
+            {
+                var photo = await MediaPicker.Default.CapturePhotoAsync();
+                if (photo != null)
+                {
+                    using var stream = await photo.OpenReadAsync();
+                    using var ms = new MemoryStream();
+                    await stream.CopyToAsync(ms);
+                    _expense.ReceiptImage = ms.ToArray();
+                    
+                    Snackbar.Add("Photo captured successfully", Severity.Success);
+                }
+            }
+            
+            Snackbar.Add("Camera capture coming soon", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error capturing photo: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string GetImageDataUrl(byte[] imageData)
+    {
+        if (imageData == null || imageData.Length == 0)
+            return "";
+        
+        return $"data:image/jpeg;base64,{Convert.ToBase64String(imageData)}";
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await _form.Validate();
+
+            if (!_formValid)
+            {
+                Snackbar.Add("Please fix validation errors", Severity.Error);
+                return;
+            }
+
+            // Set the expense date from the nullable DateTime
+            if (_expenseDate.HasValue)
+            {
+                _expense.ExpenseDate = _expenseDate.Value;
+            }
+
+            if (_isNew)
+            {
+                await UnitOfWork.Expenses.AddAsync(_expense);
+            }
+            else
+            {
+                await UnitOfWork.Expenses.UpdateAsync(_expense);
+            }
+            
+            await UnitOfWork.SaveChangesAsync();
+            
+            Snackbar.Add($"Expense {(_isNew ? "added" : "updated")} successfully", Severity.Success);
+            NavigationManager.NavigateTo("/expenses");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving expense: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        try
+        {
+            await UnitOfWork.Expenses.DeleteAsync(_expense);
+            await UnitOfWork.SaveChangesAsync();
+            
+            Snackbar.Add("Expense deleted successfully", Severity.Success);
+            NavigationManager.NavigateTo("/expenses");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting expense: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/expenses");
+    }
+
+    private void UpdateTruckId(string? truckId)
+    {
+        _expense.TruckId = truckId;
+    }
+
+    private Color GetCategoryColor(ExpenseCategory category)
+    {
+        return category switch
+        {
+            ExpenseCategory.Fuel => Color.Warning,
+            ExpenseCategory.Maintenance => Color.Info,
+            ExpenseCategory.Insurance => Color.Primary,
+            ExpenseCategory.Permits => Color.Secondary,
+            ExpenseCategory.Tolls => Color.Default,
+            ExpenseCategory.DriverPay => Color.Success,
+            ExpenseCategory.TruckPayment => Color.Error,
+            ExpenseCategory.Tires => Color.Info,
+            _ => Color.Default
+        };
+    }
+}

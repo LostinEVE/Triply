@@ -1,0 +1,189 @@
+@page "/invoices"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+
+<PageTitle>Invoices - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Description" Class="mr-2" />
+    Invoices
+</MudText>
+
+<MudCard Elevation="3" Class="mb-3">
+    <MudCardContent>
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap">
+            <MudStack Row="true" Spacing="2">
+                <MudDatePicker Date="@_startDate" 
+                              DateChanged="@((DateTime? date) => { _startDate = date; LoadInvoicesAsync(); })"
+                              Label="Start Date" 
+                              Variant="Variant.Outlined"
+                              Clearable="true" />
+                
+                <MudDatePicker Date="@_endDate" 
+                              DateChanged="@((DateTime? date) => { _endDate = date; LoadInvoicesAsync(); })"
+                              Label="End Date" 
+                              Variant="Variant.Outlined"
+                              Clearable="true" />
+                
+                <MudSelect Value="@_selectedCustomerId" 
+                          ValueChanged="@((Guid? id) => { _selectedCustomerId = id; LoadInvoicesAsync(); })"
+                          Label="Customer" 
+                          T="Guid?"
+                          Variant="Variant.Outlined"
+                          Clearable="true">
+                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">All Customers</MudSelectItem>
+                    @foreach (var customer in _customers)
+                    {
+                        <MudSelectItem T="Guid?" Value="@customer.CustomerId">@customer.CompanyName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
+            
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      StartIcon="@Icons.Material.Filled.Add"
+                      OnClick="@(() => NavigateTo("/invoices/create"))">
+                Create Invoice
+            </MudButton>
+        </MudStack>
+    </MudCardContent>
+</MudCard>
+
+<MudCard Elevation="3">
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+        <MudTabPanel Text="All" Icon="@Icons.Material.Filled.List">
+            <InvoiceDataGrid Invoices="@_invoices" OnRefresh="@LoadInvoicesAsync" />
+        </MudTabPanel>
+        
+        <MudTabPanel Text="Draft" Icon="@Icons.Material.Filled.Edit" BadgeData="@(_draftCount > 0 ? _draftCount : null)" BadgeColor="Color.Default">
+            <ChildContent>
+                <InvoiceDataGrid Invoices="@_draftInvoices" OnRefresh="@LoadInvoicesAsync" />
+            </ChildContent>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Sent" Icon="@Icons.Material.Filled.Send" BadgeData="@(_sentCount > 0 ? _sentCount : null)" BadgeColor="Color.Info">
+            <ChildContent>
+                <InvoiceDataGrid Invoices="@_sentInvoices" OnRefresh="@LoadInvoicesAsync" />
+            </ChildContent>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Paid" Icon="@Icons.Material.Filled.CheckCircle" BadgeData="@(_paidCount > 0 ? _paidCount : null)" BadgeColor="Color.Success">
+            <ChildContent>
+                <InvoiceDataGrid Invoices="@_paidInvoices" OnRefresh="@LoadInvoicesAsync" />
+            </ChildContent>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Overdue" Icon="@Icons.Material.Filled.Warning" BadgeData="@(_overdueCount > 0 ? _overdueCount : null)" BadgeColor="Color.Error">
+            <ChildContent>
+                <InvoiceDataGrid Invoices="@_overdueInvoices" OnRefresh="@LoadInvoicesAsync" />
+            </ChildContent>
+        </MudTabPanel>
+    </MudTabs>
+</MudCard>
+
+@code {
+    private List<Invoice> _invoices = new();
+    private List<Customer> _customers = new();
+    private bool _loading = true;
+    
+    // Filters
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+    private Guid? _selectedCustomerId;
+    
+    // Filtered lists
+    private List<Invoice> _draftInvoices = new();
+    private List<Invoice> _sentInvoices = new();
+    private List<Invoice> _paidInvoices = new();
+    private List<Invoice> _overdueInvoices = new();
+    
+    // Counts
+    private int _draftCount = 0;
+    private int _sentCount = 0;
+    private int _paidCount = 0;
+    private int _overdueCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomersAsync();
+        await LoadInvoicesAsync();
+    }
+
+    private async Task LoadCustomersAsync()
+    {
+        try
+        {
+            _customers = await UnitOfWork.Customers.GetQueryable()
+                .OrderBy(c => c.CompanyName)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading customers: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadInvoicesAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            var query = UnitOfWork.Invoices.GetQueryable();
+
+            // Apply filters
+            if (_startDate.HasValue)
+            {
+                query = query.Where(i => i.InvoiceDate >= _startDate.Value);
+            }
+            if (_endDate.HasValue)
+            {
+                query = query.Where(i => i.InvoiceDate <= _endDate.Value.AddDays(1));
+            }
+            if (_selectedCustomerId.HasValue)
+            {
+                query = query.Where(i => i.CustomerId == _selectedCustomerId.Value);
+            }
+
+            query = query.Include(i => i.Customer).Include(i => i.LineItems);
+            
+            _invoices = await query
+                .OrderByDescending(i => i.InvoiceDate)
+                .ToListAsync();
+            
+            // Categorize invoices
+            var today = DateTime.Now.Date;
+            
+            _draftInvoices = _invoices.Where(i => i.Status == InvoiceStatus.Draft).ToList();
+            _sentInvoices = _invoices.Where(i => i.Status == InvoiceStatus.Sent).ToList();
+            _paidInvoices = _invoices.Where(i => i.Status == InvoiceStatus.Paid || i.Status == InvoiceStatus.PartiallyPaid).ToList();
+            _overdueInvoices = _invoices.Where(i => 
+                (i.Status == InvoiceStatus.Sent || i.Status == InvoiceStatus.PartiallyPaid) && 
+                i.DueDate < today).ToList();
+            
+            _draftCount = _draftInvoices.Count;
+            _sentCount = _sentInvoices.Count;
+            _paidCount = _paidInvoices.Count;
+            _overdueCount = _overdueInvoices.Count;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading invoices: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+    }
+}

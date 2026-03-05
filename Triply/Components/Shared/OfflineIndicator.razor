@@ -1,0 +1,75 @@
+@using MudBlazor
+@using Triply.Core.Interfaces
+@implements IDisposable
+@inject IConnectivityService ConnectivityService
+@inject IOfflineQueueService QueueService
+@inject NavigationManager NavigationManager
+
+@if (!_isConnected)
+{
+    <MudChip T="string" 
+             Icon="@Icons.Material.Filled.CloudOff" 
+             Color="Color.Warning" 
+             Size="Size.Small"
+             OnClick="@(() => NavigateToSyncStatus())">
+        Offline
+    </MudChip>
+}
+else if (_pendingCount > 0)
+{
+    <MudChip T="string" 
+             Icon="@Icons.Material.Filled.CloudQueue" 
+             Color="Color.Info" 
+             Size="Size.Small"
+             OnClick="@(() => NavigateToSyncStatus())">
+        @_pendingCount pending
+    </MudChip>
+}
+else
+{
+    <MudChip T="string" 
+             Icon="@Icons.Material.Filled.CloudDone" 
+             Color="Color.Success" 
+             Size="Size.Small"
+             Variant="Variant.Text">
+        Online
+    </MudChip>
+}
+
+@code {
+    private bool _isConnected = true;
+    private int _pendingCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isConnected = ConnectivityService.IsConnected;
+        _pendingCount = await QueueService.GetPendingCountAsync();
+
+        ConnectivityService.ConnectivityChanged += OnConnectivityChanged;
+        QueueService.PendingCountChanged += OnPendingCountChanged;
+        ConnectivityService.StartMonitoring();
+    }
+
+    private void OnConnectivityChanged(object? sender, bool isConnected)
+    {
+        _isConnected = isConnected;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnPendingCountChanged(object? sender, int count)
+    {
+        _pendingCount = count;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void NavigateToSyncStatus()
+    {
+        NavigationManager.NavigateTo("/sync-status");
+    }
+
+    public void Dispose()
+    {
+        ConnectivityService.ConnectivityChanged -= OnConnectivityChanged;
+        QueueService.PendingCountChanged -= OnPendingCountChanged;
+    }
+}

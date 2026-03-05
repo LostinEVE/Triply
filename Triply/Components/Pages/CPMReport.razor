@@ -1,0 +1,708 @@
+@page "/reports/cpm"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using CoreCPMReport = Triply.Core.Models.CPMReport
+@using CoreCompanySettings = Triply.Core.Models.CompanySettings
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject IUnitOfWork UnitOfWork
+@inject ISnackbar Snackbar
+@inject IPdfGenerationService PdfService
+
+<PageTitle>Cost Per Mile Report - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.ShowChart" Class="mr-2" />
+    Cost Per Mile Analysis
+</MudText>
+
+<!-- Filters -->
+<MudCard Elevation="3" Class="mb-3">
+    <MudCardContent>
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudSelect @bind-Value="_selectedTruckId" 
+                      Label="Truck" 
+                      T="string"
+                      Variant="Variant.Outlined"
+                      Style="min-width: 150px;">
+                <MudSelectItem T="string" Value="@("")">All Trucks</MudSelectItem>
+                @foreach (var truck in _trucks)
+                {
+                    <MudSelectItem T="string" Value="@truck.TruckId">@truck.TruckId</MudSelectItem>
+                }
+            </MudSelect>
+            
+            <MudDatePicker @bind-Date="_startDate" 
+                          Label="Start Date" 
+                          Variant="Variant.Outlined" />
+            
+            <MudDatePicker @bind-Date="_endDate" 
+                          Label="End Date" 
+                          Variant="Variant.Outlined" />
+            
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      OnClick="RunReportAsync"
+                      Disabled="@_loading">
+                Run Report
+            </MudButton>
+            
+            <MudSpacer />
+            
+            @if (_report != null)
+            {
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Default" 
+                          StartIcon="@Icons.Material.Filled.Print"
+                          OnClick="PrintReport">
+                    Print
+                </MudButton>
+                
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Error" 
+                          StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                          OnClick="ExportToPDFAsync">
+                    Export PDF
+                </MudButton>
+            }
+        </MudStack>
+    </MudCardContent>
+</MudCard>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_report != null)
+{
+    <!-- Report Header -->
+    <MudCard Elevation="3" Class="mb-3">
+        <MudCardContent>
+            <MudStack AlignItems="AlignItems.Center" Spacing="1">
+                <MudText Typo="Typo.h5">Cost Per Mile Analysis</MudText>
+                <MudText Typo="Typo.h6">@_companySettings.CompanyName</MudText>
+                <MudText Typo="Typo.body1">
+                    @_report.StartDate.ToString("MMM d, yyyy") - @_report.EndDate.ToString("MMM d, yyyy")
+                </MudText>
+                @if (!string.IsNullOrEmpty(_report.TruckId))
+                {
+                    <MudChip T="string" Size="Size.Small">Truck: @_report.TruckId</MudChip>
+                }
+            </MudStack>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- Summary Cards -->
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.caption">Total Miles</MudText>
+                            <MudText Typo="Typo.h4">@_report.TotalMiles.ToString("N0")</MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.Speed" Size="Size.Large" Color="Color.Primary" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.caption">Total Revenue</MudText>
+                            <MudText Typo="Typo.h4" Color="Color.Success">@_report.TotalRevenue.ToString("C0")</MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Size="Size.Large" Color="Color.Success" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.caption">Total Expenses</MudText>
+                            <MudText Typo="Typo.h4" Color="Color.Error">@_report.TotalExpenses.ToString("C0")</MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.TrendingDown" Size="Size.Large" Color="Color.Error" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.caption">Total Profit</MudText>
+                            <MudText Typo="Typo.h4" Color="@(_report.TotalProfit >= 0 ? Color.Success : Color.Error)">
+                                @_report.TotalProfit.ToString("C0")
+                            </MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.AccountBalance" 
+                                Size="Size.Large" 
+                                Color="@(_report.TotalProfit >= 0 ? Color.Success : Color.Error)" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+    
+    <!-- CPM Overview Cards -->
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3" Style="border-left: 5px solid #4caf50;">
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">REVENUE PER MILE</MudText>
+                        <MudText Typo="Typo.h3" Color="Color.Success">@_report.RevenuePerMile.ToString("C3")</MudText>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3" Style="border-left: 5px solid #f44336;">
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">COST PER MILE</MudText>
+                        <MudText Typo="Typo.h3" Color="Color.Error">@_report.TotalCPM.ToString("C3")</MudText>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3" Style="@($"border-left: 5px solid {(_report.ProfitPerMile >= 0 ? "#4caf50" : "#f44336")};")">
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">PROFIT PER MILE</MudText>
+                        <MudText Typo="Typo.h3" Color="@(_report.ProfitPerMile >= 0 ? Color.Success : Color.Error)">
+                            @_report.ProfitPerMile.ToString("C3")
+                        </MudText>
+                        <MudText Typo="Typo.body2">
+                            Margin: @_report.ProfitMargin.ToString("N1")%
+                        </MudText>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+    
+    <!-- Operating Costs Breakdown -->
+    <MudCard Elevation="3" Class="mb-3">
+        <MudCardHeader Style="background-color: #f44336; color: white;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">OPERATING COSTS BREAKDOWN</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudTable Items="@GetCostBreakdown()" Dense="true" Hover="true" Elevation="0">
+                <HeaderContent>
+                    <MudTh>Category</MudTh>
+                    <MudTh Style="text-align: right;">Total Cost</MudTh>
+                    <MudTh Style="text-align: right;">Cost Per Mile</MudTh>
+                    <MudTh Style="text-align: right;">% of Total</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <MudIcon Icon="@context.Icon" Size="Size.Small" Color="@context.Color" />
+                            <strong>@context.Category</strong>
+                        </MudStack>
+                    </MudTd>
+                    <MudTd Style="text-align: right;"><strong>@context.TotalCost.ToString("C2")</strong></MudTd>
+                    <MudTd Style="text-align: right;">@context.CPM.ToString("C3")</MudTd>
+                    <MudTd Style="text-align: right;">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Justify="Justify.FlexEnd">
+                            <span>@context.Percentage.ToString("N1")%</span>
+                            <MudProgressLinear Value="@((double)context.Percentage)" 
+                                             Color="Color.Primary" 
+                                             Size="Size.Small" 
+                                             Style="width: 100px;" />
+                        </MudStack>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+            
+            <MudDivider Class="my-3" />
+            
+            <MudStack Row="true" Justify="Justify.SpaceBetween" Class="pa-2" Style="background-color: #ffebee;">
+                <MudText Typo="Typo.h6">Total Operating Cost</MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                    <MudText Typo="Typo.h6">@_report.TotalExpenses.ToString("C2")</MudText>
+                    <MudText Typo="Typo.h6">@_report.TotalCPM.ToString("C3") /mi</MudText>
+                </MudStack>
+            </MudStack>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- Fixed vs Variable Costs -->
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3">
+                <MudCardHeader Style="background-color: #ff9800; color: white;">
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">FIXED COSTS</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body1">Total Amount</MudText>
+                            <MudText Typo="Typo.body1"><strong>@_report.FixedCosts.ToString("C2")</strong></MudText>
+                        </MudStack>
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body1">Per Mile</MudText>
+                            <MudText Typo="Typo.body1"><strong>@_report.FixedCPM.ToString("C3")</strong></MudText>
+                        </MudStack>
+                        <MudDivider />
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Includes: Insurance, Permits, Truck Payment, etc.
+                        </MudText>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3">
+                <MudCardHeader Style="background-color: #9c27b0; color: white;">
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">VARIABLE COSTS</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body1">Total Amount</MudText>
+                            <MudText Typo="Typo.body1"><strong>@_report.VariableCosts.ToString("C2")</strong></MudText>
+                        </MudStack>
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body1">Per Mile</MudText>
+                            <MudText Typo="Typo.body1"><strong>@_report.VariableCPM.ToString("C3")</strong></MudText>
+                        </MudStack>
+                        <MudDivider />
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Includes: Fuel, Maintenance, Tolls, Tires, etc.
+                        </MudText>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+    
+    <!-- Break-Even Analysis -->
+    <MudCard Elevation="3" Class="mb-3">
+        <MudCardHeader Style="background-color: #ffc107; color: black;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">BREAK-EVEN ANALYSIS</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">BREAK-EVEN RATE</MudText>
+                        <MudText Typo="Typo.h4">@_report.BreakEvenRatePerMile.ToString("C3")</MudText>
+                        <MudText Typo="Typo.caption">Minimum rate to cover costs</MudText>
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">TARGET RATE (15% margin)</MudText>
+                        <MudText Typo="Typo.h4" Color="Color.Success">@_report.TargetRatePerMile.ToString("C3")</MudText>
+                        <MudText Typo="Typo.caption">Recommended minimum rate</MudText>
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">ACTUAL RATE</MudText>
+                        <MudText Typo="Typo.h4" Color="@(_report.RevenuePerMile >= _report.TargetRatePerMile ? Color.Success : Color.Warning)">
+                            @_report.RevenuePerMile.ToString("C3")
+                        </MudText>
+                        <MudChip T="string" 
+                                Size="Size.Small" 
+                                Color="@(_report.RevenuePerMile >= _report.TargetRatePerMile ? Color.Success : Color.Warning)">
+                            @(_report.RevenuePerMile >= _report.TargetRatePerMile ? "Above Target" : "Below Target")
+                        </MudChip>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- Efficiency Metrics -->
+    <MudCard Elevation="3" Class="mb-3">
+        <MudCardHeader Style="background-color: #4caf50; color: white;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">EFFICIENCY METRICS</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Total Loads</MudText>
+                        <MudText Typo="Typo.h5">@_report.TotalLoads</MudText>
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Avg Revenue/Load</MudText>
+                        <MudText Typo="Typo.h5">@_report.AverageRevenuePerLoad.ToString("C0")</MudText>
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Avg Miles/Load</MudText>
+                        <MudText Typo="Typo.h5">@_report.AverageMilesPerLoad.ToString("N0")</MudText>
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Average MPG</MudText>
+                        <MudText Typo="Typo.h5">@_report.AverageMPG.ToString("N2")</MudText>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- Truck Comparison (if all trucks selected) -->
+    @if (string.IsNullOrEmpty(_selectedTruckId) && _truckComparisons.Any())
+    {
+        <MudCard Elevation="3" Class="mb-3">
+            <MudCardHeader Style="background-color: #2196f3; color: white;">
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">TRUCK COMPARISON</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudTable Items="@_truckComparisons.OrderBy(t => t.TotalCPM)" Dense="true" Hover="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>Truck</MudTh>
+                        <MudTh Style="text-align: right;">Miles</MudTh>
+                        <MudTh Style="text-align: right;">Revenue/Mi</MudTh>
+                        <MudTh Style="text-align: right;">Cost/Mi</MudTh>
+                        <MudTh Style="text-align: right;">Profit/Mi</MudTh>
+                        <MudTh Style="text-align: right;">Margin</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd><strong>@context.TruckId</strong></MudTd>
+                        <MudTd Style="text-align: right;">@context.TotalMiles.ToString("N0")</MudTd>
+                        <MudTd Style="text-align: right;">@context.RevenuePerMile.ToString("C3")</MudTd>
+                        <MudTd Style="text-align: right;">@context.TotalCPM.ToString("C3")</MudTd>
+                        <MudTd Style="text-align: right;">
+                            <MudText Typo="Typo.body2" Color="@(context.ProfitPerMile >= 0 ? Color.Success : Color.Error)">
+                                @context.ProfitPerMile.ToString("C3")
+                            </MudText>
+                        </MudTd>
+                        <MudTd Style="text-align: right;">@context.ProfitMargin.ToString("N1")%</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudCardContent>
+        </MudCard>
+    }
+}
+else
+{
+    <MudAlert Severity="Severity.Info">
+        Select a truck and date range, then click "Run Report" to generate the Cost Per Mile Analysis.
+    </MudAlert>
+}
+
+@code {
+    private CoreCPMReport? _report;
+    private CoreCompanySettings _companySettings = new();
+    private List<Truck> _trucks = new();
+    private List<CoreCPMReport> _truckComparisons = new();
+    
+    private bool _loading = false;
+    private string _selectedTruckId = "";
+    private DateTime? _startDate = DateTime.Today.AddMonths(-1);
+    private DateTime? _endDate = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTrucksAsync();
+        await LoadCompanySettingsAsync();
+    }
+
+    private async Task LoadTrucksAsync()
+    {
+        try
+        {
+            _trucks = await UnitOfWork.Trucks.GetQueryable()
+                .OrderBy(t => t.TruckId)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading trucks: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadCompanySettingsAsync()
+    {
+        try
+        {
+            _companySettings = await UnitOfWork.CompanySettings.GetQueryable().FirstOrDefaultAsync()
+                ?? new CoreCompanySettings { CompanyName = "Your Company" };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading company settings: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RunReportAsync()
+    {
+        if (!_startDate.HasValue || !_endDate.HasValue)
+        {
+            Snackbar.Add("Please select valid dates", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            _loading = true;
+            
+            _report = await GenerateCPMReportAsync(_selectedTruckId);
+            
+            // Generate truck comparisons if all trucks selected
+            if (string.IsNullOrEmpty(_selectedTruckId))
+            {
+                _truckComparisons = new List<CoreCPMReport>();
+                foreach (var truck in _trucks)
+                {
+                    var truckReport = await GenerateCPMReportAsync(truck.TruckId);
+                    if (truckReport.TotalMiles > 0)
+                    {
+                        _truckComparisons.Add(truckReport);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error generating report: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task<CoreCPMReport> GenerateCPMReportAsync(string? truckId)
+    {
+        var report = new CoreCPMReport
+        {
+            StartDate = _startDate!.Value,
+            EndDate = _endDate!.Value,
+            TruckId = truckId
+        };
+        
+        // Get loads
+        var loadsQuery = UnitOfWork.Loads.GetQueryable()
+            .Where(l => l.DeliveryDate.HasValue && 
+                       l.DeliveryDate.Value >= _startDate && 
+                       l.DeliveryDate.Value <= _endDate);
+        
+        if (!string.IsNullOrEmpty(truckId))
+        {
+            loadsQuery = loadsQuery.Where(l => l.TruckId == truckId);
+        }
+        
+        var loads = await loadsQuery.ToListAsync();
+        
+        report.TotalMiles = loads.Sum(l => l.Miles);
+        report.TotalRevenue = loads.Sum(l => l.TotalAmount);
+        report.TotalLoads = loads.Count;
+        
+        // Get expenses
+        var expensesQuery = UnitOfWork.Expenses.GetQueryable()
+            .Where(e => e.ExpenseDate >= _startDate && e.ExpenseDate <= _endDate);
+        
+        if (!string.IsNullOrEmpty(truckId))
+        {
+            expensesQuery = expensesQuery.Where(e => e.TruckId == truckId);
+        }
+        
+        var expenses = await expensesQuery.ToListAsync();
+        
+        // Categorize expenses
+        report.FuelCost = expenses.Where(e => e.Category == ExpenseCategory.Fuel).Sum(e => e.Amount);
+        report.MaintenanceCost = expenses.Where(e => e.Category == ExpenseCategory.Maintenance).Sum(e => e.Amount);
+        report.InsuranceCost = expenses.Where(e => e.Category == ExpenseCategory.Insurance).Sum(e => e.Amount);
+        report.PermitsCost = expenses.Where(e => e.Category == ExpenseCategory.Permits).Sum(e => e.Amount);
+        report.TollsCost = expenses.Where(e => e.Category == ExpenseCategory.Tolls).Sum(e => e.Amount);
+        report.TiresCost = expenses.Where(e => e.Category == ExpenseCategory.Tires).Sum(e => e.Amount);
+        report.TruckPaymentCost = expenses.Where(e => e.Category == ExpenseCategory.TruckPayment).Sum(e => e.Amount);
+        report.DriverPayCost = expenses.Where(e => e.Category == ExpenseCategory.DriverPay).Sum(e => e.Amount);
+        report.OtherExpenses = expenses.Where(e => e.Category == ExpenseCategory.Other).Sum(e => e.Amount);
+
+        // Get fuel for MPG
+        var fuelQuery = UnitOfWork.FuelEntries.GetQueryable()
+            .Where(f => f.FuelDate >= _startDate && f.FuelDate <= _endDate);
+        
+        if (!string.IsNullOrEmpty(truckId))
+        {
+            fuelQuery = fuelQuery.Where(f => f.TruckId == truckId);
+        }
+        
+        var fuelEntries = await fuelQuery.ToListAsync();
+        var totalGallons = fuelEntries.Sum(f => f.Gallons);
+        report.TotalGallons = totalGallons;
+
+        return report;
+    }
+
+    private List<CostBreakdownItem> GetCostBreakdown()
+    {
+        if (_report == null) return new List<CostBreakdownItem>();
+        
+        var items = new List<CostBreakdownItem>();
+        
+        if (_report.FuelCost > 0)
+            items.Add(new CostBreakdownItem 
+            { 
+                Category = "Fuel", 
+                TotalCost = _report.FuelCost, 
+                CPM = _report.FuelCPM,
+                Percentage = (_report.FuelCost / _report.TotalExpenses) * 100,
+                Icon = Icons.Material.Filled.LocalGasStation,
+                Color = Color.Warning
+            });
+        
+        if (_report.MaintenanceCost > 0)
+            items.Add(new CostBreakdownItem 
+            { 
+                Category = "Maintenance", 
+                TotalCost = _report.MaintenanceCost, 
+                CPM = _report.MaintenanceCPM,
+                Percentage = (_report.MaintenanceCost / _report.TotalExpenses) * 100,
+                Icon = Icons.Material.Filled.Build,
+                Color = Color.Primary
+            });
+        
+        if (_report.DriverPayCost > 0)
+            items.Add(new CostBreakdownItem 
+            { 
+                Category = "Driver Pay", 
+                TotalCost = _report.DriverPayCost, 
+                CPM = _report.DriverPayCPM,
+                Percentage = (_report.DriverPayCost / _report.TotalExpenses) * 100,
+                Icon = Icons.Material.Filled.Person,
+                Color = Color.Info
+            });
+        
+        if (_report.InsuranceCost > 0)
+            items.Add(new CostBreakdownItem 
+            { 
+                Category = "Insurance", 
+                TotalCost = _report.InsuranceCost, 
+                CPM = _report.InsuranceCPM,
+                Percentage = (_report.InsuranceCost / _report.TotalExpenses) * 100,
+                Icon = Icons.Material.Filled.Security,
+                Color = Color.Success
+            });
+        
+        if (_report.TruckPaymentCost > 0)
+            items.Add(new CostBreakdownItem 
+            { 
+                Category = "Truck Payment", 
+                TotalCost = _report.TruckPaymentCost, 
+                CPM = _report.TruckPaymentCPM,
+                Percentage = (_report.TruckPaymentCost / _report.TotalExpenses) * 100,
+                Icon = Icons.Material.Filled.Payment,
+                Color = Color.Secondary
+            });
+        
+        if (_report.TiresCost > 0)
+            items.Add(new CostBreakdownItem 
+            { 
+                Category = "Tires", 
+                TotalCost = _report.TiresCost, 
+                CPM = _report.TiresCPM,
+                Percentage = (_report.TiresCost / _report.TotalExpenses) * 100,
+                Icon = Icons.Material.Filled.Circle,
+                Color = Color.Dark
+            });
+        
+        if (_report.TollsCost > 0)
+            items.Add(new CostBreakdownItem 
+            { 
+                Category = "Tolls", 
+                TotalCost = _report.TollsCost, 
+                CPM = _report.TollsCPM,
+                Percentage = (_report.TollsCost / _report.TotalExpenses) * 100,
+                Icon = Icons.Material.Filled.Toll,
+                Color = Color.Tertiary
+            });
+        
+        if (_report.PermitsCost > 0)
+            items.Add(new CostBreakdownItem 
+            { 
+                Category = "Permits", 
+                TotalCost = _report.PermitsCost, 
+                CPM = _report.PermitsCPM,
+                Percentage = (_report.PermitsCost / _report.TotalExpenses) * 100,
+                Icon = Icons.Material.Filled.Description,
+                Color = Color.Default
+            });
+        
+        if (_report.OtherExpenses > 0)
+            items.Add(new CostBreakdownItem 
+            { 
+                Category = "Other", 
+                TotalCost = _report.OtherExpenses, 
+                CPM = _report.OtherCPM,
+                Percentage = (_report.OtherExpenses / _report.TotalExpenses) * 100,
+                Icon = Icons.Material.Filled.MoreHoriz,
+                Color = Color.Default
+            });
+        
+        return items;
+    }
+
+    private void PrintReport()
+    {
+        Snackbar.Add("Print functionality coming soon", Severity.Info);
+    }
+
+    private async Task ExportToPDFAsync()
+    {
+        try
+        {
+            if (_report == null) return;
+            
+            var pdfBytes = await PdfService.GenerateCPMReportAsync(_report, _companySettings);
+            
+            var fileName = $"CPM_{_report.StartDate:yyyyMMdd}_{_report.EndDate:yyyyMMdd}.pdf";
+            Snackbar.Add("PDF generated successfully", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error generating PDF: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private class CostBreakdownItem
+    {
+        public string Category { get; set; } = "";
+        public decimal TotalCost { get; set; }
+        public decimal CPM { get; set; }
+        public decimal Percentage { get; set; }
+        public string Icon { get; set; } = "";
+        public Color Color { get; set; }
+    }
+}

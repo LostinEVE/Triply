@@ -1,0 +1,138 @@
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Receipt" Class="mr-2" />
+            Quick Add Expense
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudStack Spacing="3">
+                <MudNumericField @bind-Value="_expense.Amount" 
+                                Label="Amount" 
+                                Required="true"
+                                Adornment="Adornment.Start"
+                                AdornmentText="$"
+                                Format="N2"
+                                Min="0"
+                                Variant="Variant.Outlined"
+                                Immediate="true"
+                                AutoFocus="true" />
+
+                <MudSelect @bind-Value="_expense.Category" 
+                          Label="Category" 
+                          T="ExpenseCategory"
+                          Variant="Variant.Outlined"
+                          Required="true">
+                    @foreach (ExpenseCategory category in Enum.GetValues(typeof(ExpenseCategory)))
+                    {
+                        <MudSelectItem Value="@category">
+                            <MudChip T="string" Size="Size.Small" Color="@GetCategoryColor(category)">
+                                @category
+                            </MudChip>
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+
+                <TruckSelector SelectedTruckId="@_expense.TruckId"
+                              SelectedTruckIdChanged="@((value) => _expense.TruckId = value)"
+                              Label="Truck (Optional)"
+                              Clearable="true"
+                              FilterStatus="TruckStatus.Active" />
+
+                <MudTextField @bind-Value="_expense.Vendor" 
+                             Label="Vendor" 
+                             Variant="Variant.Outlined" />
+
+                <MudTextField @bind-Value="_expense.Description" 
+                             Label="Description" 
+                             Lines="2"
+                             Variant="Variant.Outlined" />
+
+                <MudSelect @bind-Value="_expense.PaymentMethod" 
+                          Label="Payment Method" 
+                          T="PaymentMethod"
+                          Variant="Variant.Outlined">
+                    @foreach (PaymentMethod method in Enum.GetValues(typeof(PaymentMethod)))
+                    {
+                        <MudSelectItem Value="@method">@method</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="OnCancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" 
+                  Color="Color.Primary" 
+                  StartIcon="@Icons.Material.Filled.Save"
+                  OnClick="SaveAsync">
+            Save
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter]
+    public EventCallback<Expense> OnSaved { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private Expense _expense = new();
+    private MudForm _form = null!;
+
+    protected override void OnInitialized()
+    {
+        _expense = new Expense
+        {
+            ExpenseDate = DateTime.Now,
+            PaymentMethod = PaymentMethod.CreditCard,
+            IsDeductible = true
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await _form.Validate();
+
+            await UnitOfWork.Expenses.AddAsync(_expense);
+            await UnitOfWork.SaveChangesAsync();
+
+            Snackbar.Add("Expense added successfully", Severity.Success);
+
+            if (OnSaved.HasDelegate)
+                await OnSaved.InvokeAsync(_expense);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving expense: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private Color GetCategoryColor(ExpenseCategory category)
+    {
+        return category switch
+        {
+            ExpenseCategory.Fuel => Color.Warning,
+            ExpenseCategory.Maintenance => Color.Info,
+            ExpenseCategory.Insurance => Color.Primary,
+            ExpenseCategory.Permits => Color.Secondary,
+            ExpenseCategory.Tolls => Color.Default,
+            ExpenseCategory.DriverPay => Color.Success,
+            ExpenseCategory.TruckPayment => Color.Error,
+            ExpenseCategory.Tires => Color.Info,
+            _ => Color.Default
+        };
+    }
+}

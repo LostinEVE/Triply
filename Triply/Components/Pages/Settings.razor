@@ -1,0 +1,229 @@
+@page "/settings"
+@using MudBlazor
+@inject NavigationManager NavigationManager
+
+<PageTitle>Settings - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Settings" Class="mr-2" />
+    Settings
+</MudText>
+
+<MudText Typo="Typo.body1" Class="mb-4 mud-text-secondary">
+    Manage your application settings and preferences
+</MudText>
+
+<MudGrid>
+    <!-- Company Information -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/settings/company"))">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Business" 
+                            Size="Size.Large" 
+                            Color="Color.Primary" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        Company Information
+                    </MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                        Company details, DOT/MC numbers, address, and invoice settings
+                    </MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Primary" 
+                          FullWidth="true"
+                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                    Configure
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Email Setup -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/settings/email"))">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Email" 
+                            Size="Size.Large" 
+                            Color="Color.Info" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        Email Setup
+                    </MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                        SMTP configuration, email signature, and test connection
+                    </MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Info" 
+                          FullWidth="true"
+                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                    Configure
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Tax Settings -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/settings/tax"))">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.AccountBalance" 
+                            Size="Size.Large" 
+                            Color="Color.Warning" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        Tax Settings
+                    </MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                        Filing status, tax rates, fiscal year, and estimated payments
+                    </MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Warning" 
+                          FullWidth="true"
+                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                    Configure
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Data Management -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/settings/data"))">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Storage" 
+                            Size="Size.Large" 
+                            Color="Color.Secondary" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        Data Management
+                    </MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                        Export, import, and manage your application data
+                    </MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Secondary" 
+                          FullWidth="true"
+                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                    Manage
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+
+    <!-- Notifications -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/settings/notifications"))">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Notifications" 
+                            Size="Size.Large" 
+                            Color="Color.Warning" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        Notifications
+                    </MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                        Configure alerts and notification preferences
+                    </MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Warning" 
+                          FullWidth="true"
+                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                    Configure
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+            
+    
+    <!-- About -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => ShowAboutDialog())">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Info" 
+                            Size="Size.Large" 
+                            Color="Color.Default" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        About Triply
+                    </MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                        Version information, licenses, and support
+                    </MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Default" 
+                          FullWidth="true"
+                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                    View
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Preferences -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Tune" 
+                            Size="Size.Large" 
+                            Color="Color.Success" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        Quick Preferences
+                    </MudText>
+                </MudStack>
+                
+                <MudStack Spacing="2" Class="mt-4">
+                    <MudSwitch @bind-Value="_darkMode" 
+                              Label="Dark Mode" 
+                              Color="Color.Primary" 
+                              T="bool" />
+                    
+                    <MudSwitch @bind-Value="_notifications" 
+                              Label="Notifications" 
+                              Color="Color.Primary" 
+                              T="bool" />
+                    
+                    <MudSwitch @bind-Value="_autoSave" 
+                              Label="Auto-Save" 
+                              Color="Color.Primary" 
+                              T="bool" />
+                </MudStack>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private bool _darkMode = false;
+    private bool _notifications = true;
+    private bool _autoSave = true;
+
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+    }
+
+    private void ShowAboutDialog()
+    {
+        // TODO: Implement about dialog with version info
+        NavigationManager.NavigateTo("/about");
+    }
+}

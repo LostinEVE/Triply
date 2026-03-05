@@ -1,0 +1,93 @@
+@using MudBlazor
+@using Triply.Core.Interfaces
+@using Triply.Core.Models
+@implements IDisposable
+@inject INotificationService NotificationService
+
+@if (Count > 0)
+{
+    <MudBadge Content="@Count" 
+              Color="@GetBadgeColor()" 
+              Overlap="true" 
+              Class="mx-2">
+        @ChildContent
+    </MudBadge>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public NotificationType? FilterType { get; set; }
+
+    [Parameter]
+    public bool ShowCriticalOnly { get; set; } = false;
+
+    private int Count { get; set; }
+    private NotificationSummary? _summary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UpdateCountAsync();
+        NotificationService.NotificationsUpdated += OnNotificationsUpdated;
+    }
+
+    private async Task UpdateCountAsync()
+    {
+        _summary = await NotificationService.GetNotificationSummaryAsync();
+        
+        if (FilterType.HasValue)
+        {
+            Count = FilterType.Value switch
+            {
+                NotificationType.InvoiceOverdue => _summary.InvoicesOverdue,
+                NotificationType.InvoiceDueSoon => _summary.InvoicesDueSoon,
+                NotificationType.MaintenanceDue => _summary.MaintenanceDue,
+                NotificationType.MaintenanceOverdue => _summary.MaintenanceOverdue,
+                NotificationType.DocumentExpiring => _summary.DocumentsExpiring,
+                NotificationType.DocumentExpired => _summary.DocumentsExpired,
+                NotificationType.TaxPaymentDue => _summary.TaxPaymentsDue,
+                NotificationType.IFTAFilingDue => _summary.IFTAFilingsDue,
+                _ => 0
+            };
+        }
+        else if (ShowCriticalOnly)
+        {
+            Count = _summary.CriticalCount;
+        }
+        else
+        {
+            Count = _summary.TotalCount;
+        }
+    }
+
+    private void OnNotificationsUpdated(object? sender, NotificationSummary summary)
+    {
+        _summary = summary;
+        InvokeAsync(async () =>
+        {
+            await UpdateCountAsync();
+            StateHasChanged();
+        });
+    }
+
+    private Color GetBadgeColor()
+    {
+        if (ShowCriticalOnly || FilterType == NotificationType.InvoiceOverdue || 
+            FilterType == NotificationType.MaintenanceOverdue || FilterType == NotificationType.DocumentExpired)
+        {
+            return Color.Error;
+        }
+        return Color.Warning;
+    }
+
+    public void Dispose()
+    {
+        NotificationService.NotificationsUpdated -= OnNotificationsUpdated;
+    }
+}

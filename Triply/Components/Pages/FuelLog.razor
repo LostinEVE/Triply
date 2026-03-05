@@ -1,0 +1,451 @@
+@page "/fuel"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+
+<PageTitle>Fuel Log - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.LocalGasStation" Class="mr-2" />
+    Fuel Log
+    @if (_fuelEntries != null && _filteredEntries != null)
+    {
+        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">
+            @_filteredEntries.Count() entries
+        </MudChip>
+    }
+</MudText>
+
+<MudCard Elevation="3" Class="mb-3">
+    <MudCardContent>
+        <MudText Typo="Typo.h6" Class="mb-3">
+            <MudIcon Icon="@Icons.Material.Filled.FilterList" Class="mr-2" />
+            Filters
+        </MudText>
+        
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudDatePicker Date="@_startDate" 
+                              DateChanged="@((DateTime? date) => { _startDate = date; ApplyFilters(); })"
+                              Label="Start Date" 
+                              Variant="Variant.Outlined"
+                              Clearable="true" />
+            </MudItem>
+            
+            <MudItem xs="12" sm="6" md="3">
+                <MudDatePicker Date="@_endDate" 
+                              DateChanged="@((DateTime? date) => { _endDate = date; ApplyFilters(); })"
+                              Label="End Date" 
+                              Variant="Variant.Outlined"
+                              Clearable="true" />
+            </MudItem>
+            
+            <MudItem xs="12" sm="6" md="3">
+                <TruckSelector SelectedTruckId="@_selectedTruckId"
+                              SelectedTruckIdChanged="@UpdateTruckFilter"
+                              Label="Truck"
+                              ShowAllOption="true"
+                              Clearable="true" />
+            </MudItem>
+            
+            <MudItem xs="12" sm="6" md="3">
+                <MudTextField Value="@_selectedState" 
+                             ValueChanged="@((string state) => { _selectedState = state; ApplyFilters(); })"
+                             Placeholder="State (e.g., CA)" 
+                             Label="Filter by State"
+                             Variant="Variant.Outlined"
+                             Immediate="true"
+                             Clearable="true" />
+            </MudItem>
+            
+            <MudItem xs="12" sm="6" md="3">
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Default" 
+                          StartIcon="@Icons.Material.Filled.Clear"
+                          OnClick="ClearFilters">
+                    Clear Filters
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudCardContent>
+</MudCard>
+
+<MudCard Elevation="3" Class="mb-3">
+    <MudCardContent>
+        <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudText Typo="Typo.body1">
+                <strong>Total Gallons:</strong> <span class="fuel-stat">@_totalGallons.ToString("N2")</span>
+            </MudText>
+            <MudText Typo="Typo.body1">
+                <strong>Total Cost:</strong> <span class="fuel-stat">@_totalCost.ToString("C2")</span>
+            </MudText>
+            <MudText Typo="Typo.body1">
+                <strong>Avg PPG:</strong> <span class="fuel-stat">@_averagePPG.ToString("C3")</span>
+            </MudText>
+            <MudText Typo="Typo.body1">
+                <strong>Avg MPG:</strong> <span class="fuel-stat">@_averageMPG.ToString("N2")</span>
+            </MudText>
+        </MudStack>
+    </MudCardContent>
+</MudCard>
+
+<MudCard Elevation="3">
+    <MudCardContent>
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Justify="Justify.FlexEnd" Class="mb-3">
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      StartIcon="@Icons.Material.Filled.Add"
+                      OnClick="@(() => NavigateTo("/fuel/add"))">
+                Add Fuel Entry
+            </MudButton>
+        </MudStack>
+
+        <MudDataGrid T="FuelEntryWithMPG" 
+                     Items="@_entriesWithMPG" 
+                     Loading="@_loading"
+                     Dense="true"
+                     Hover="true"
+                     Striped="true"
+                     RowsPerPage="25"
+                     SortMode="SortMode.Multiple">
+            <Columns>
+                <PropertyColumn Property="x => x.FuelDate" 
+                               Title="Date" 
+                               Format="MM/dd/yyyy" />
+                
+                <TemplateColumn Title="Truck">
+                    <CellTemplate>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                            @context.Item.TruckId
+                        </MudChip>
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <TemplateColumn Title="Location" Sortable="false">
+                    <CellTemplate>
+                        <MudStack Spacing="0">
+                            @if (!string.IsNullOrEmpty(context.Item.TruckStop))
+                            {
+                                <MudText Typo="Typo.body2"><strong>@context.Item.TruckStop</strong></MudText>
+                            }
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @context.Item.City, @context.Item.State
+                                @if (context.Item.Latitude.HasValue && context.Item.Longitude.HasValue)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Color="Color.Success" />
+                                }
+                            </MudText>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <PropertyColumn Property="x => x.Gallons" 
+                               Title="Gallons" 
+                               Format="N2" />
+                
+                <PropertyColumn Property="x => x.PricePerGallon" 
+                               Title="PPG" 
+                               Format="C3" />
+                
+                <TemplateColumn Title="Total" Sortable="true" SortBy="@(x => x.TotalCost)">
+                    <CellTemplate>
+                        <MudText Typo="Typo.body2" Color="Color.Warning">
+                            <strong>@context.Item.TotalCost.ToString("C2")</strong>
+                        </MudText>
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <PropertyColumn Property="x => x.Odometer" 
+                               Title="Odometer" 
+                               Format="N0" />
+                
+                <TemplateColumn Title="MPG">
+                    <CellTemplate>
+                        @if (context.Item.MPG.HasValue)
+                        {
+                            <MudChip T="string" 
+                                    Size="Size.Small" 
+                                    Color="@GetMPGColor(context.Item.MPG.Value)">
+                                @context.Item.MPG.Value.ToString("N2")
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">-</MudText>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <TemplateColumn Title="Type">
+                    <CellTemplate>
+                        <MudChip T="string" 
+                                Size="Size.Small" 
+                                Color="@(context.Item.FuelType == FuelType.Diesel ? Color.Warning : Color.Info)">
+                            @context.Item.FuelType
+                        </MudChip>
+                    </CellTemplate>
+                </TemplateColumn>
+                
+                <TemplateColumn Title="Actions" Sortable="false">
+                    <CellTemplate>
+                        <MudStack Row="true" Spacing="1">
+                            <MudTooltip Text="Edit">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                             Size="Size.Small" 
+                                             Color="Color.Info"
+                                             OnClick="@(() => NavigateTo($"/fuel/edit/{context.Item.FuelEntryId}"))"/>
+                            </MudTooltip>
+                            <MudTooltip Text="Delete">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                             Size="Size.Small" 
+                                             Color="Color.Error"
+                                             OnClick="@(() => DeleteEntry(context.Item))"/>
+                            </MudTooltip>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            
+            <PagerContent>
+                <MudDataGridPager T="FuelEntryWithMPG" />
+            </PagerContent>
+        </MudDataGrid>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private List<Triply.Core.Models.FuelEntry> _fuelEntries = new();
+    private IEnumerable<Triply.Core.Models.FuelEntry> _filteredEntries = new List<Triply.Core.Models.FuelEntry>();
+    private List<FuelEntryWithMPG> _entriesWithMPG = new();
+    private bool _loading = true;
+    
+    // Filters
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+    private string? _selectedTruckId;
+    private string _selectedState = "";
+    
+    // Totals
+    private decimal _totalGallons = 0;
+    private decimal _totalCost = 0;
+    private decimal _averagePPG = 0;
+    private decimal _averageMPG = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Default to current month
+        _startDate = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
+        _endDate = DateTime.Now.Date;
+        
+        await LoadFuelEntriesAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Check for query string filters
+        var uri = new Uri(NavigationManager.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        
+        if (query["truckId"] != null)
+        {
+            _selectedTruckId = query["truckId"];
+        }
+    }
+
+    private async Task LoadFuelEntriesAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            _fuelEntries = await UnitOfWork.FuelEntries.GetQueryable()
+                .Include(f => f.Truck)
+                .OrderByDescending(f => f.FuelDate)
+                .ThenByDescending(f => f.Odometer)
+                .ToListAsync();
+            
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading fuel entries: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        var filtered = _fuelEntries.AsEnumerable();
+        
+        // Date range
+        if (_startDate.HasValue)
+        {
+            filtered = filtered.Where(f => f.FuelDate >= _startDate.Value);
+        }
+        if (_endDate.HasValue)
+        {
+            filtered = filtered.Where(f => f.FuelDate <= _endDate.Value.AddDays(1));
+        }
+        
+        // Truck
+        if (!string.IsNullOrEmpty(_selectedTruckId))
+        {
+            filtered = filtered.Where(f => f.TruckId == _selectedTruckId);
+        }
+        
+        // State
+        if (!string.IsNullOrWhiteSpace(_selectedState))
+        {
+            filtered = filtered.Where(f => 
+                f.State?.Equals(_selectedState, StringComparison.OrdinalIgnoreCase) == true);
+        }
+        
+        _filteredEntries = filtered.ToList();
+        
+        // Calculate MPG for each entry
+        CalculateMPG();
+        
+        // Calculate totals
+        _totalGallons = _filteredEntries.Sum(f => f.Gallons);
+        _totalCost = _filteredEntries.Sum(f => f.TotalCost);
+        _averagePPG = _filteredEntries.Any() ? _filteredEntries.Average(f => f.PricePerGallon) : 0;
+        _averageMPG = _entriesWithMPG.Where(e => e.MPG.HasValue).Any() 
+            ? _entriesWithMPG.Where(e => e.MPG.HasValue).Average(e => e.MPG!.Value) 
+            : 0;
+        
+        StateHasChanged();
+    }
+
+    private void CalculateMPG()
+    {
+        _entriesWithMPG.Clear();
+        
+        // Group by truck to calculate MPG
+        var byTruck = _filteredEntries.GroupBy(f => f.TruckId);
+        
+        foreach (var truckGroup in byTruck)
+        {
+            var entries = truckGroup.OrderBy(f => f.Odometer).ToList();
+            
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var current = entries[i];
+                decimal? mpg = null;
+                
+                // Calculate MPG based on previous entry
+                if (i > 0)
+                {
+                    var previous = entries[i - 1];
+                    var miles = current.Odometer - previous.Odometer;
+                    
+                    if (miles > 0 && previous.Gallons > 0)
+                    {
+                        mpg = miles / previous.Gallons;
+                    }
+                }
+                
+                _entriesWithMPG.Add(new FuelEntryWithMPG
+                {
+                    FuelEntryId = current.FuelEntryId,
+                    TruckId = current.TruckId,
+                    FuelDate = current.FuelDate,
+                    Odometer = current.Odometer,
+                    Gallons = current.Gallons,
+                    PricePerGallon = current.PricePerGallon,
+                    TotalCost = current.TotalCost,
+                    FuelType = current.FuelType,
+                    TruckStop = current.TruckStop,
+                    City = current.City,
+                    State = current.State,
+                    Latitude = current.Latitude,
+                    Longitude = current.Longitude,
+                    MPG = mpg
+                });
+            }
+        }
+        
+        // Sort by date for display
+        _entriesWithMPG = _entriesWithMPG
+            .OrderByDescending(e => e.FuelDate)
+            .ThenByDescending(e => e.Odometer)
+            .ToList();
+    }
+
+    private void ClearFilters()
+    {
+        _startDate = null;
+        _endDate = null;
+        _selectedTruckId = null;
+        _selectedState = "";
+        ApplyFilters();
+    }
+
+    private void UpdateTruckFilter(string? truckId)
+    {
+        _selectedTruckId = truckId;
+        ApplyFilters();
+    }
+
+    private async Task DeleteEntry(FuelEntryWithMPG entry)
+    {
+        try
+        {
+            var fuelEntry = await UnitOfWork.FuelEntries.GetQueryable()
+                .FirstOrDefaultAsync(f => f.FuelEntryId == entry.FuelEntryId);
+            
+            if (fuelEntry != null)
+            {
+                await UnitOfWork.FuelEntries.DeleteAsync(fuelEntry);
+                await UnitOfWork.SaveChangesAsync();
+                
+                Snackbar.Add("Fuel entry deleted successfully", Severity.Success);
+                await LoadFuelEntriesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting fuel entry: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+    }
+
+    private Color GetMPGColor(decimal mpg)
+    {
+        // Typical diesel truck MPG ranges
+        if (mpg >= 7.0m) return Color.Success;      // Excellent
+        if (mpg >= 6.0m) return Color.Info;         // Good
+        if (mpg >= 5.0m) return Color.Warning;      // Average
+        return Color.Error;                         // Poor
+    }
+
+    // DTO for MPG calculation
+    private class FuelEntryWithMPG
+    {
+        public Guid FuelEntryId { get; set; }
+        public string TruckId { get; set; } = "";
+        public DateTime FuelDate { get; set; }
+        public int Odometer { get; set; }
+        public decimal Gallons { get; set; }
+        public decimal PricePerGallon { get; set; }
+        public decimal TotalCost { get; set; }
+        public FuelType FuelType { get; set; }
+        public string? TruckStop { get; set; }
+        public string? City { get; set; }
+        public string? State { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public decimal? MPG { get; set; }
+    }
+}

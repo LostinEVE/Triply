@@ -1,0 +1,189 @@
+@using MudBlazor
+
+@if (ImageBytes != null && ImageBytes.Length > 0)
+{
+    <div class="image-container" @onclick="OnImageClick">
+        <img src="@GetImageSource()" 
+             alt="@AltText" 
+             class="@GetImageClass()"
+             style="@ImageStyle" />
+        
+        @if (ShowOverlay && !string.IsNullOrEmpty(OverlayText))
+        {
+            <div class="image-overlay">
+                <MudText Typo="Typo.caption" Color="Color.Surface">@OverlayText</MudText>
+            </div>
+        }
+    </div>
+}
+else if (ShowPlaceholder)
+{
+    <div class="image-placeholder @GetPlaceholderClass()" @onclick="OnImageClick">
+        <MudStack AlignItems="AlignItems.Center" Spacing="1">
+            <MudIcon Icon="@PlaceholderIcon" Size="@GetPlaceholderIconSize()" Color="Color.Default" />
+            @if (!string.IsNullOrEmpty(PlaceholderText))
+            {
+                <MudText Typo="Typo.caption" Align="Align.Center">@PlaceholderText</MudText>
+            }
+        </MudStack>
+    </div>
+}
+
+<style>
+    .image-container {
+        position: relative;
+        display: inline-block;
+        cursor: @(Clickable ? "pointer" : "default");
+    }
+
+    .image-thumbnail {
+        width: 80px;
+        height: 80px;
+        object-fit: cover;
+        border-radius: 4px;
+    }
+
+    .image-medium {
+        width: 200px;
+        height: 200px;
+        object-fit: cover;
+        border-radius: 4px;
+    }
+
+    .image-full {
+        max-width: 100%;
+        height: auto;
+        border-radius: 4px;
+    }
+
+    .image-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.6);
+        padding: 4px 8px;
+        text-align: center;
+    }
+
+    .image-placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #f5f5f5;
+        border: 2px dashed #ccc;
+        border-radius: 4px;
+        cursor: @(Clickable ? "pointer" : "default");
+    }
+
+    .image-placeholder:hover {
+        background-color: #eeeeee;
+    }
+
+    .placeholder-thumbnail {
+        width: 80px;
+        height: 80px;
+    }
+
+    .placeholder-medium {
+        width: 200px;
+        height: 200px;
+    }
+
+    .placeholder-large {
+        width: 100%;
+        height: 200px;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public byte[]? ImageBytes { get; set; }
+
+    [Parameter]
+    public DisplayMode Mode { get; set; } = DisplayMode.Medium;
+
+    [Parameter]
+    public string AltText { get; set; } = "Image";
+
+    [Parameter]
+    public string ImageStyle { get; set; } = "";
+
+    [Parameter]
+    public bool Clickable { get; set; } = true;
+
+    [Parameter]
+    public EventCallback OnClick { get; set; }
+
+    [Parameter]
+    public bool ShowPlaceholder { get; set; } = true;
+
+    [Parameter]
+    public string PlaceholderIcon { get; set; } = Icons.Material.Filled.Image;
+
+    [Parameter]
+    public string PlaceholderText { get; set; } = "";
+
+    [Parameter]
+    public bool ShowOverlay { get; set; } = false;
+
+    [Parameter]
+    public string OverlayText { get; set; } = "";
+
+    private string GetImageSource()
+    {
+        if (ImageBytes == null || ImageBytes.Length == 0)
+            return "";
+
+        var base64 = Convert.ToBase64String(ImageBytes);
+        return $"data:image/jpeg;base64,{base64}";
+    }
+
+    private string GetImageClass()
+    {
+        return Mode switch
+        {
+            DisplayMode.Thumbnail => "image-thumbnail",
+            DisplayMode.Medium => "image-medium",
+            DisplayMode.Full => "image-full",
+            _ => "image-medium"
+        };
+    }
+
+    private string GetPlaceholderClass()
+    {
+        return Mode switch
+        {
+            DisplayMode.Thumbnail => "placeholder-thumbnail",
+            DisplayMode.Medium => "placeholder-medium",
+            DisplayMode.Full => "placeholder-large",
+            _ => "placeholder-medium"
+        };
+    }
+
+    private Size GetPlaceholderIconSize()
+    {
+        return Mode switch
+        {
+            DisplayMode.Thumbnail => Size.Medium,
+            DisplayMode.Medium => Size.Large,
+            DisplayMode.Full => Size.Large,
+            _ => Size.Medium
+        };
+    }
+
+    private async Task OnImageClick()
+    {
+        if (Clickable && OnClick.HasDelegate)
+        {
+            await OnClick.InvokeAsync();
+        }
+    }
+
+    public enum DisplayMode
+    {
+        Thumbnail,
+        Medium,
+        Full
+    }
+}

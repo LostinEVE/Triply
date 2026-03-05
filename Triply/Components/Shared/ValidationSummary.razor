@@ -1,0 +1,20 @@
+@using FluentValidation
+@typeparam TModel
+
+@if (ValidationErrors.Any())
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <MudText Typo="Typo.subtitle2" Class="mb-2"><strong>Please fix the following errors:</strong></MudText>
+        <ul style="margin-bottom: 0;">
+            @foreach (var error in ValidationErrors)
+            {
+                <li>@error</li>
+            }
+        </ul>
+    </MudAlert>
+}
+
+@code {
+    [Parameter]
+    public List<string> ValidationErrors { get; set; } = new();
+}

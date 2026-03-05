@@ -1,0 +1,514 @@
+@page "/invoices/{InvoiceId:guid}"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@using Triply.Components.Shared
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+@inject IDialogService DialogService
+@inject IEmailService EmailService
+@inject IPdfGenerationService PdfService
+
+<PageTitle>Invoice @(_invoice?.InvoiceNumber ?? "") - Triply</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_invoice != null)
+{
+    <MudStack Spacing="3">
+        <!-- Header with Actions -->
+        <MudCard Elevation="3">
+            <MudCardContent>
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.h4">
+                            Invoice @_invoice.InvoiceNumber
+                        </MudText>
+                        <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(_invoice)">
+                            @GetStatusText(_invoice)
+                        </MudChip>
+                    </MudStack>
+                    
+                    <MudStack Row="true" Spacing="2">
+                        @if (_invoice.Status == InvoiceStatus.Draft)
+                        {
+                            <MudButton Variant="Variant.Outlined" 
+                                      Color="Color.Info" 
+                                      StartIcon="@Icons.Material.Filled.Edit"
+                                      OnClick="@(() => NavigateTo($"/invoices/edit/{_invoice.InvoiceId}"))">
+                                Edit
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled" 
+                                      Color="Color.Success" 
+                                      StartIcon="@Icons.Material.Filled.Send"
+                                      OnClick="OpenSendDialogAsync">
+                                Send Invoice
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" 
+                                      Color="Color.Error" 
+                                      StartIcon="@Icons.Material.Filled.Delete"
+                                      OnClick="DeleteInvoiceAsync">
+                                Delete
+                            </MudButton>
+                        }
+                        
+                        @if (_invoice.Status == InvoiceStatus.Sent || _invoice.Status == InvoiceStatus.PartiallyPaid || _invoice.Status == InvoiceStatus.Overdue)
+                        {
+                            <MudButton Variant="Variant.Filled" 
+                                      Color="Color.Primary" 
+                                      StartIcon="@Icons.Material.Filled.Payment"
+                                      OnClick="OpenRecordPaymentDialogAsync">
+                                Record Payment
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" 
+                                      Color="Color.Default" 
+                                      StartIcon="@Icons.Material.Filled.Send"
+                                      OnClick="OpenSendDialogAsync">
+                                Resend
+                            </MudButton>
+                        }
+                        
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Default" 
+                                  StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                                  OnClick="DownloadPDFAsync">
+                            Download PDF
+                        </MudButton>
+                        
+                        @if (_invoice.Status != InvoiceStatus.Paid && _invoice.Status != InvoiceStatus.Void)
+                        {
+                            <MudButton Variant="Variant.Outlined" 
+                                      Color="Color.Error" 
+                                      StartIcon="@Icons.Material.Filled.Block"
+                                      OnClick="VoidInvoiceAsync">
+                                Void
+                            </MudButton>
+                        }
+                    </MudStack>
+                </MudStack>
+            </MudCardContent>
+        </MudCard>
+        
+        <!-- Invoice Details -->
+        <MudGrid>
+            <MudItem xs="12" md="8">
+                <MudCard Elevation="3">
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">BILL TO</MudText>
+                                <MudText Typo="Typo.h6">@_invoice.Customer.CompanyName</MudText>
+                                <MudText Typo="Typo.body2">@_invoice.Customer.ContactName</MudText>
+                                <MudText Typo="Typo.body2">@_invoice.Customer.ContactEmail</MudText>
+                                <MudText Typo="Typo.body2">@_invoice.Customer.ContactPhone</MudText>
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudStack Spacing="2">
+                                    <div>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">INVOICE DATE</MudText>
+                                        <MudText Typo="Typo.body1">@_invoice.InvoiceDate.ToString("MM/dd/yyyy")</MudText>
+                                    </div>
+                                    <div>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">DUE DATE</MudText>
+                                        <MudText Typo="Typo.body1" Color="@(IsOverdue ? Color.Error : Color.Default)">
+                                            @_invoice.DueDate.ToString("MM/dd/yyyy")
+                                            @if (IsOverdue)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-2">
+                                                    @DaysOverdue days overdue
+                                                </MudChip>
+                                            }
+                                        </MudText>
+                                    </div>
+                                    @if (_invoice.SentDate.HasValue)
+                                    {
+                                        <div>
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">SENT DATE</MudText>
+                                            <MudText Typo="Typo.body1">@_invoice.SentDate.Value.ToString("MM/dd/yyyy HH:mm")</MudText>
+                                        </div>
+                                    }
+                                </MudStack>
+                            </MudItem>
+                        </MudGrid>
+                        
+                        <MudDivider Class="my-4" />
+                        
+                        <!-- Line Items -->
+                        <MudText Typo="Typo.h6" Class="mb-3">Line Items</MudText>
+                        <MudSimpleTable Dense="true" Hover="true">
+                            <thead>
+                                <tr>
+                                    <th>Description</th>
+                                    <th class="text-right">Quantity</th>
+                                    <th class="text-right">Unit Price</th>
+                                    <th class="text-right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var lineItem in _invoice.LineItems)
+                                {
+                                    <tr>
+                                        <td>
+                                            @lineItem.Description
+                                            @if (lineItem.LoadId.HasValue)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.LocalShipping" Class="ml-2">
+                                                    Load
+                                                </MudChip>
+                                            }
+                                        </td>
+                                        <td class="text-right">@lineItem.Quantity.ToString("N2")</td>
+                                        <td class="text-right">@lineItem.UnitPrice.ToString("C2")</td>
+                                        <td class="text-right"><strong>@lineItem.LineTotal.ToString("C2")</strong></td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr style="border-top: 2px solid;">
+                                    <td colspan="3" class="text-right"><strong>Subtotal:</strong></td>
+                                    <td class="text-right"><strong>@_invoice.Subtotal.ToString("C2")</strong></td>
+                                </tr>
+                                @if (_invoice.TaxAmount > 0)
+                                {
+                                    <tr>
+                                        <td colspan="3" class="text-right">Tax:</td>
+                                        <td class="text-right">@_invoice.TaxAmount.ToString("C2")</td>
+                                    </tr>
+                                }
+                                <tr style="font-size: 1.2rem;">
+                                    <td colspan="3" class="text-right"><strong>TOTAL:</strong></td>
+                                    <td class="text-right"><strong>@_invoice.TotalAmount.ToString("C2")</strong></td>
+                                </tr>
+                                @if (_invoice.AmountPaid > 0)
+                                {
+                                    <tr>
+                                        <td colspan="3" class="text-right">Amount Paid:</td>
+                                        <td class="text-right" style="color: green;">-@_invoice.AmountPaid.ToString("C2")</td>
+                                    </tr>
+                                    <tr style="font-size: 1.1rem; font-weight: bold;">
+                                        <td colspan="3" class="text-right">Balance Due:</td>
+                                        <td class="text-right">@_invoice.Balance.ToString("C2")</td>
+                                    </tr>
+                                }
+                            </tfoot>
+                        </MudSimpleTable>
+                        
+                        @if (!string.IsNullOrEmpty(_invoice.Notes))
+                        {
+                            <MudText Typo="Typo.h6" Class="mt-4 mb-2">Notes / Terms</MudText>
+                            <MudPaper Elevation="1" Class="pa-3">
+                                <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@_invoice.Notes</MudText>
+                            </MudPaper>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            
+            <!-- Sidebar - Payment History -->
+            <MudItem xs="12" md="4">
+                @if (_invoice.Status == InvoiceStatus.Paid || _invoice.Status == InvoiceStatus.PartiallyPaid || _invoice.AmountPaid > 0)
+                {
+                    <MudCard Elevation="3">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">
+                                    <MudIcon Icon="@Icons.Material.Filled.History" Class="mr-2" />
+                                    Payment History
+                                </MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudTimeline TimelinePosition="TimelinePosition.Start">
+                                @if (_invoice.PaidDate.HasValue)
+                                {
+                                    <MudTimelineItem Color="Color.Success" Size="Size.Small">
+                                        <ItemContent>
+                                            <MudText Typo="Typo.body2">
+                                                Payment: <strong>@_invoice.AmountPaid.ToString("C2")</strong>
+                                            </MudText>
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                                @_invoice.PaidDate.Value.ToString("MM/dd/yyyy HH:mm")
+                                            </MudText>
+                                        </ItemContent>
+                                    </MudTimelineItem>
+                                }
+                                @if (_invoice.SentDate.HasValue)
+                                {
+                                    <MudTimelineItem Color="Color.Info" Size="Size.Small">
+                                        <ItemContent>
+                                            <MudText Typo="Typo.body2">Invoice Sent</MudText>
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                                @_invoice.SentDate.Value.ToString("MM/dd/yyyy HH:mm")
+                                            </MudText>
+                                        </ItemContent>
+                                    </MudTimelineItem>
+                                }
+                                <MudTimelineItem Color="Color.Default" Size="Size.Small">
+                                    <ItemContent>
+                                        <MudText Typo="Typo.body2">Invoice Created</MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            @_invoice.InvoiceDate.ToString("MM/dd/yyyy")
+                                        </MudText>
+                                    </ItemContent>
+                                </MudTimelineItem>
+                            </MudTimeline>
+                        </MudCardContent>
+                    </MudCard>
+                }
+                
+                <!-- Quick Stats -->
+                <MudCard Elevation="3" Class="mt-3">
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-3">Invoice Summary</MudText>
+                        <MudStack Spacing="2">
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2">Status:</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(_invoice)">
+                                    @GetStatusText(_invoice)
+                                </MudChip>
+                            </MudStack>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2">Line Items:</MudText>
+                                <MudText Typo="Typo.body2"><strong>@_invoice.LineItems.Count</strong></MudText>
+                            </MudStack>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2">Total Amount:</MudText>
+                                <MudText Typo="Typo.body2"><strong>@_invoice.TotalAmount.ToString("C2")</strong></MudText>
+                            </MudStack>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2">Amount Paid:</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Success">@_invoice.AmountPaid.ToString("C2")</MudText>
+                            </MudStack>
+                            <MudDivider />
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body1"><strong>Balance Due:</strong></MudText>
+                                <MudText Typo="Typo.h6" Color="@(_invoice.Balance > 0 ? Color.Warning : Color.Success)">
+                                    @_invoice.Balance.ToString("C2")
+                                </MudText>
+                            </MudStack>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+}
+
+@code {
+    [Parameter]
+    public Guid InvoiceId { get; set; }
+
+    private Invoice? _invoice;
+    private bool _loading = true;
+    
+    private bool IsOverdue => _invoice != null && 
+        _invoice.DueDate < DateTime.Now.Date && 
+        _invoice.Status != InvoiceStatus.Paid && 
+        _invoice.Status != InvoiceStatus.Void;
+    
+    private int DaysOverdue => IsOverdue ? (DateTime.Now.Date - _invoice!.DueDate).Days : 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInvoiceAsync();
+        
+        // Check for action query parameter
+        var uri = new Uri(NavigationManager.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        
+        if (query["action"] != null)
+        {
+            var action = query["action"];
+            await HandleActionAsync(action);
+        }
+    }
+
+    private async Task LoadInvoiceAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            _invoice = await UnitOfWork.Invoices.GetQueryable()
+                .Include(i => i.Customer)
+                .Include(i => i.LineItems)
+                    .ThenInclude(li => li.Load)
+                .FirstOrDefaultAsync(i => i.InvoiceId == InvoiceId);
+            
+            if (_invoice == null)
+            {
+                Snackbar.Add("Invoice not found", Severity.Error);
+                NavigationManager.NavigateTo("/invoices");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading invoice: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task HandleActionAsync(string action)
+    {
+        switch (action.ToLower())
+        {
+            case "send":
+                await OpenSendDialogAsync();
+                break;
+            case "payment":
+                await OpenRecordPaymentDialogAsync();
+                break;
+            case "pdf":
+                await DownloadPDFAsync();
+                break;
+            case "void":
+                await VoidInvoiceAsync();
+                break;
+            case "delete":
+                await DeleteInvoiceAsync();
+                break;
+        }
+    }
+
+    private async Task OpenSendDialogAsync()
+    {
+        if (_invoice == null) return;
+
+        var parameters = new DialogParameters();
+        parameters.Add("Invoice", _invoice);
+        parameters.Add("OnSent", EventCallback.Factory.Create(this, async () => await LoadInvoiceAsync()));
+
+        var options = new DialogOptions
+        { 
+            MaxWidth = MaxWidth.Medium, 
+            FullWidth = true,
+            CloseButton = true
+        };
+        
+        var dialog = await DialogService.ShowAsync<SendInvoiceDialog>("Send Invoice", parameters, options);
+        var result = await dialog.Result;
+        
+        if (!result.Canceled)
+        {
+            await LoadInvoiceAsync();
+        }
+    }
+
+    private async Task OpenRecordPaymentDialogAsync()
+    {
+        if (_invoice == null) return;
+
+        var parameters = new DialogParameters();
+        parameters.Add("Invoice", (object)_invoice);
+
+        var options = new DialogOptions
+        { 
+            MaxWidth = MaxWidth.Small, 
+            FullWidth = true,
+            CloseButton = true
+        };
+        
+        var dialog = await DialogService.ShowAsync<RecordPaymentDialog>("Record Payment", parameters, options);
+        var result = await dialog.Result;
+        
+        if (!result.Canceled)
+        {
+            await LoadInvoiceAsync();
+        }
+    }
+
+    private async Task DownloadPDFAsync()
+    {
+        try
+        {
+            if (_invoice == null) return;
+            
+            // TODO: Implement PDF download
+            Snackbar.Add("PDF download coming soon", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error downloading PDF: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task VoidInvoiceAsync()
+    {
+        try
+        {
+            if (_invoice == null) return;
+            
+            _invoice.Status = InvoiceStatus.Void;
+            await UnitOfWork.Invoices.UpdateAsync(_invoice);
+            await UnitOfWork.SaveChangesAsync();
+            
+            Snackbar.Add("Invoice voided successfully", Severity.Success);
+            await LoadInvoiceAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error voiding invoice: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteInvoiceAsync()
+    {
+        try
+        {
+            if (_invoice == null) return;
+            
+            await UnitOfWork.Invoices.DeleteAsync(_invoice);
+            await UnitOfWork.SaveChangesAsync();
+            
+            Snackbar.Add("Invoice deleted successfully", Severity.Success);
+            NavigationManager.NavigateTo("/invoices");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting invoice: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+    }
+
+    private Color GetStatusColor(Invoice invoice)
+    {
+        if (IsOverdue)
+        {
+            return Color.Error;
+        }
+        
+        return invoice.Status switch
+        {
+            InvoiceStatus.Draft => Color.Default,
+            InvoiceStatus.Sent => Color.Info,
+            InvoiceStatus.Paid => Color.Success,
+            InvoiceStatus.PartiallyPaid => Color.Warning,
+            InvoiceStatus.Overdue => Color.Error,
+            InvoiceStatus.Void => Color.Dark,
+            _ => Color.Default
+        };
+    }
+
+    private string GetStatusText(Invoice invoice)
+    {
+        if (IsOverdue)
+        {
+            return "Overdue";
+        }
+        
+        return invoice.Status.ToString();
+    }
+}

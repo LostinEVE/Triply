@@ -1,0 +1,47 @@
+/* Invoice header */
+::deep .invoice-header {
+    border-bottom: 2px solid var(--mud-palette-primary);
+}
+
+/* Line items table */
+::deep .mud-simple-table tfoot {
+    background-color: rgba(0,0,0,0.02);
+}
+
+::deep .mud-theme-dark .mud-simple-table tfoot {
+    background-color: rgba(255,255,255,0.05);
+}
+
+/* Payment history timeline */
+::deep .mud-timeline-item {
+    padding-bottom: 16px;
+}
+
+/* Balance due highlight */
+.balance-due {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+/* Overdue warning */
+.overdue-warning {
+    background-color: rgba(244, 67, 54, 0.1);
+    border-left: 4px solid #f44336;
+    padding: 12px;
+}
+
+/* Action buttons */
+::deep .action-buttons .mud-button {
+    margin-right: 8px;
+}
+
+.text-right {
+    text-align: right !important;
+}
+
+/* Responsive table */
+@media (max-width: 960px) {
+    ::deep .mud-simple-table {
+        font-size: 0.875rem;
+    }
+}

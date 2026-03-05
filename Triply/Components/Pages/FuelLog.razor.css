@@ -1,0 +1,39 @@
+.fuel-stat {
+    color: var(--mud-palette-warning);
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+/* MPG color indicators */
+::deep .mud-chip.mpg-excellent {
+    background-color: #4caf50 !important;
+}
+
+::deep .mud-chip.mpg-good {
+    background-color: #2196f3 !important;
+}
+
+::deep .mud-chip.mpg-average {
+    background-color: #ff9800 !important;
+}
+
+::deep .mud-chip.mpg-poor {
+    background-color: #f44336 !important;
+}
+
+/* Location indicator icon */
+::deep .mud-icon-root.location-indicator {
+    vertical-align: middle;
+    margin-left: 4px;
+}
+
+/* Summary cards responsive */
+@media (max-width: 600px) {
+    .fuel-stat {
+        font-size: 1rem;
+    }
+}
+
+.text-right {
+    text-align: right !important;
+}

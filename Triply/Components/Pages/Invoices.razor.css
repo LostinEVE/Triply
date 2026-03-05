@@ -1,0 +1,37 @@
+/* Tab badges */
+::deep .mud-tabs .mud-chip {
+    margin-left: 8px;
+}
+
+/* Status chips */
+::deep .mud-chip.status-draft {
+    background-color: #9e9e9e !important;
+}
+
+::deep .mud-chip.status-sent {
+    background-color: #2196f3 !important;
+}
+
+::deep .mud-chip.status-paid {
+    background-color: #4caf50 !important;
+}
+
+::deep .mud-chip.status-overdue {
+    background-color: #f44336 !important;
+}
+
+/* Filter section */
+::deep .mud-card .mud-stack {
+    flex-wrap: wrap;
+}
+
+/* Data grid responsive */
+@media (max-width: 960px) {
+    ::deep .mud-table-cell {
+        padding: 8px 4px !important;
+    }
+}
+
+.text-right {
+    text-align: right !important;
+}

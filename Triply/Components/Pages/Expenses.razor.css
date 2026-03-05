@@ -1,0 +1,36 @@
+.expense-total {
+    color: var(--mud-palette-error);
+    font-size: 1.5rem;
+}
+
+.text-right {
+    text-align: right !important;
+}
+
+/* Filter section styling */
+::deep .mud-card .mud-grid {
+    align-items: center;
+}
+
+/* Category chip styling */
+::deep .mud-chip {
+    font-weight: 500;
+}
+
+/* Receipt indicator */
+::deep .mud-chip.receipt-indicator {
+    margin-top: 4px;
+}
+
+/* Data grid responsive adjustments */
+@media (max-width: 960px) {
+    ::deep .mud-table-cell {
+        padding: 8px 4px !important;
+    }
+}
+
+/* Export button hover */
+::deep .mud-button-root:hover {
+    transform: translateY(-1px);
+    transition: transform 0.2s ease;
+}

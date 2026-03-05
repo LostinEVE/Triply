@@ -1,0 +1,112 @@
+@using MudBlazor
+@inject NavigationManager NavigationManager
+@implements IDisposable
+
+<MudBreadcrumbs Items="_items" Separator=">">
+    <ItemTemplate>
+        @{
+            var item = context;
+        }
+        @if (item.Href != null)
+        {
+            <MudLink Href="@item.Href" Color="Color.Primary">
+                @if (!string.IsNullOrEmpty(item.Icon))
+                {
+                    <MudIcon Icon="@item.Icon" Size="Size.Small" Class="mr-1" />
+                }
+                @item.Text
+            </MudLink>
+        }
+        else
+        {
+            <MudText>
+                @if (!string.IsNullOrEmpty(item.Icon))
+                {
+                    <MudIcon Icon="@item.Icon" Size="Size.Small" Class="mr-1" />
+                }
+                @item.Text
+            </MudText>
+        }
+    </ItemTemplate>
+</MudBreadcrumbs>
+
+@code {
+    private List<BreadcrumbItem> _items = new();
+    
+    protected override void OnInitialized()
+    {
+        NavigationManager.LocationChanged += OnLocationChanged;
+        BuildBreadcrumbs();
+    }
+    
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        BuildBreadcrumbs();
+        StateHasChanged();
+    }
+    
+    private void BuildBreadcrumbs()
+    {
+        _items.Clear();
+        
+        var uri = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        var segments = uri.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        
+        // Always add home
+        _items.Add(new BreadcrumbItem("Dashboard", "/", false, Icons.Material.Filled.Home));
+        
+        if (segments.Length == 0)
+            return;
+        
+        var path = "";
+        for (int i = 0; i < segments.Length; i++)
+        {
+            path += "/" + segments[i];
+            var isLast = i == segments.Length - 1;
+            var (text, icon) = GetBreadcrumbInfo(segments[i]);
+            
+            _items.Add(new BreadcrumbItem(text, isLast ? null : path, false, icon));
+        }
+    }
+    
+    private (string Text, string? Icon) GetBreadcrumbInfo(string segment)
+    {
+        return segment.ToLower() switch
+        {
+            "trucks" => ("Trucks", Icons.Material.Filled.LocalShipping),
+            "loads" => ("Loads", Icons.Material.Filled.Inventory),
+            "customers" => ("Customers", Icons.Material.Filled.Business),
+            "invoices" => ("Invoices", Icons.Material.Filled.Description),
+            "expenses" => ("Expenses", Icons.Material.Filled.Receipt),
+            "fuel" => ("Fuel Log", Icons.Material.Filled.LocalGasStation),
+            "maintenance" => ("Maintenance", Icons.Material.Filled.Build),
+            "reports" => ("Reports", Icons.Material.Filled.Assessment),
+            "accounting" => ("Accounting", Icons.Material.Filled.AccountBalanceWallet),
+            "settings" => ("Settings", Icons.Material.Filled.Settings),
+            "add" => ("Add New", Icons.Material.Filled.Add),
+            "edit" => ("Edit", Icons.Material.Filled.Edit),
+            "create" => ("Create", Icons.Material.Filled.Add),
+            "profit-loss" => ("Profit & Loss", Icons.Material.Filled.TrendingUp),
+            "balance-sheet" => ("Balance Sheet", Icons.Material.Filled.AccountBalance),
+            "tax" => ("Tax Reports", Icons.Material.Filled.Money),
+            "ifta" => ("IFTA Report", Icons.Material.Filled.LocalGasStation),
+            "cpm" => ("Cost Per Mile", Icons.Material.Filled.Speed),
+            "aging" => ("AR Aging", Icons.Material.Filled.Schedule),
+            _ => (FormatSegment(segment), null)
+        };
+    }
+    
+    private string FormatSegment(string segment)
+    {
+        // Convert kebab-case or camelCase to Title Case
+        return System.Text.RegularExpressions.Regex.Replace(segment, "([a-z])([A-Z])", "$1 $2")
+            .Replace("-", " ")
+            .Replace("_", " ")
+            .ToUpper()[0] + segment.Substring(1);
+    }
+    
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}

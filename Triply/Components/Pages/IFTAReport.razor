@@ -1,0 +1,614 @@
+@page "/reports/ifta"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using CoreCompanySettings = Triply.Core.Models.CompanySettings 
+@using Triply.Core.Models
+@using Triply.Core.Interfaces
+@inject IUnitOfWork UnitOfWork
+@inject ISnackbar Snackbar
+@inject IPdfGenerationService PdfService
+@inject NavigationManager NavigationManager
+
+<PageTitle>IFTA Report - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.LocalGasStation" Class="mr-2" />
+    IFTA Quarterly Report
+</MudText>
+
+<!-- Filters -->
+<MudCard Elevation="3" Class="mb-3">
+    <MudCardContent>
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudSelect @bind-Value="_selectedYear" 
+                      Label="Year" 
+                      T="int"
+                      Variant="Variant.Outlined"
+                      Style="min-width: 120px;">
+                @for (int year = DateTime.Now.Year; year >= DateTime.Now.Year - 3; year--)
+                {
+                    <MudSelectItem Value="@year">@year</MudSelectItem>
+                }
+            </MudSelect>
+            
+            <MudSelect @bind-Value="_selectedQuarter" 
+                      Label="Quarter" 
+                      T="int"
+                      Variant="Variant.Outlined"
+                      Style="min-width: 120px;">
+                <MudSelectItem Value="1">Q1 (Jan-Mar)</MudSelectItem>
+                <MudSelectItem Value="2">Q2 (Apr-Jun)</MudSelectItem>
+                <MudSelectItem Value="3">Q3 (Jul-Sep)</MudSelectItem>
+                <MudSelectItem Value="4">Q4 (Oct-Dec)</MudSelectItem>
+            </MudSelect>
+            
+            <MudSelect @bind-Value="_selectedTruckId" 
+                      Label="Truck" 
+                      T="string"
+                      Variant="Variant.Outlined"
+                      Clearable="true"
+                      Style="min-width: 150px;">
+                <MudSelectItem T="string" Value="@("")">Fleet Total</MudSelectItem>
+                @foreach (var truck in _trucks)
+                {
+                    <MudSelectItem T="string" Value="@truck.TruckId">@truck.TruckId</MudSelectItem>
+                }
+            </MudSelect>
+            
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      OnClick="RunReportAsync"
+                      Disabled="@_loading">
+                Run Report
+            </MudButton>
+            
+            <MudSpacer />
+            
+            @if (_report != null)
+            {
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Default" 
+                          StartIcon="@Icons.Material.Filled.Print"
+                          OnClick="PrintReport">
+                    Print
+                </MudButton>
+                
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Error" 
+                          StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                          OnClick="ExportToPDFAsync">
+                    Export PDF
+                </MudButton>
+                
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Success" 
+                          StartIcon="@Icons.Material.Filled.TableView"
+                          OnClick="ExportToCSVAsync">
+                    Export CSV
+                </MudButton>
+            }
+        </MudStack>
+    </MudCardContent>
+</MudCard>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_report != null)
+{
+    <!-- Report Header -->
+    <MudCard Elevation="3" Class="mb-3">
+        <MudCardContent>
+            <MudStack AlignItems="AlignItems.Center" Spacing="1">
+                <MudText Typo="Typo.h5">IFTA Quarterly Report</MudText>
+                <MudText Typo="Typo.h6">@_companySettings.CompanyName</MudText>
+                <MudText Typo="Typo.body1">@_report.QuarterLabel</MudText>
+                <MudText Typo="Typo.body2">@_report.StartDate.ToString("MMM d, yyyy") - @_report.EndDate.ToString("MMM d, yyyy")</MudText>
+                @if (!string.IsNullOrEmpty(_selectedTruckId))
+                {
+                    <MudChip T="string" Size="Size.Small">Truck: @_selectedTruckId</MudChip>
+                }
+                @if (!string.IsNullOrEmpty(_report.VIN))
+                {
+                    <MudText Typo="Typo.caption">VIN: @_report.VIN</MudText>
+                }
+            </MudStack>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- Summary Cards -->
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.caption">Total Miles</MudText>
+                            <MudText Typo="Typo.h4">@_report.TotalMiles.ToString("N0")</MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.Speed" Size="Size.Large" Color="Color.Primary" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.caption">Total Gallons</MudText>
+                            <MudText Typo="Typo.h4">@_report.TotalGallons.ToString("N1")</MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.LocalGasStation" Size="Size.Large" Color="Color.Info" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.caption">Fleet MPG</MudText>
+                            <MudText Typo="Typo.h4">@_report.FleetMPG.ToString("N2")</MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Large" Color="Color.Success" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.caption">Net IFTA Tax</MudText>
+                            <MudText Typo="Typo.h4" Color="@(_report.NetIFTATax >= 0 ? Color.Error : Color.Success)">
+                                @_report.NetIFTATax.ToString("C2")
+                            </MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Size="Size.Large" Color="@(_report.NetIFTATax >= 0 ? Color.Error : Color.Success)" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+    
+    <!-- Filing Deadline Alert -->
+    <MudAlert Severity="@GetDeadlineSeverity()" Class="mb-3" Dense="true">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <div>
+                <MudText Typo="Typo.body1">
+                    <strong>Filing Deadline:</strong> @_report.FilingDeadline.ToString("MMMM d, yyyy")
+                </MudText>
+                <MudText Typo="Typo.caption">
+                    @GetDaysUntilDeadline() days remaining
+                </MudText>
+            </div>
+            @if (_report.IsFiled)
+            {
+                <MudChip T="string" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">
+                    Filed on @_report.FiledDate?.ToString("MM/dd/yyyy")
+                </MudChip>
+            }
+        </MudStack>
+    </MudAlert>
+    
+    <!-- State-by-State IFTA Table -->
+    <MudCard Elevation="3" Class="mb-3">
+        <MudCardHeader Style="background-color: #00bcd4; color: white;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">JURISDICTION BREAKDOWN</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudTable Items="@_report.StateData.OrderBy(s => s.State)" 
+                     Dense="true" 
+                     Hover="true" 
+                     Elevation="0"
+                     FixedHeader="true"
+                     Height="500px">
+                <HeaderContent>
+                    <MudTh>State</MudTh>
+                    <MudTh Style="text-align: right;">Miles Driven</MudTh>
+                    <MudTh Style="text-align: right;">Taxable Gallons</MudTh>
+                    <MudTh Style="text-align: right;">Gallons Purchased</MudTh>
+                    <MudTh Style="text-align: right;">Tax Rate (¢/gal)</MudTh>
+                    <MudTh Style="text-align: right;">Tax Owed</MudTh>
+                    <MudTh Style="text-align: right;">Tax Paid</MudTh>
+                    <MudTh Style="text-align: right;">Net Tax Due/(Credit)</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <strong>@context.State</strong>
+                            <MudText Typo="Typo.caption">@context.StateFullName</MudText>
+                        </MudStack>
+                    </MudTd>
+                    <MudTd Style="text-align: right;">
+                        <strong>@context.MilesDriven.ToString("N0")</strong>
+                    </MudTd>
+                    <MudTd Style="text-align: right;">
+                        @context.TaxableGallons.ToString("N1")
+                    </MudTd>
+                    <MudTd Style="text-align: right;">
+                        @context.GallonsPurchased.ToString("N1")
+                    </MudTd>
+                    <MudTd Style="text-align: right;">
+                        @context.StateFuelTaxRate.ToString("N2")¢
+                    </MudTd>
+                    <MudTd Style="text-align: right;">
+                        @context.TaxOwed.ToString("C2")
+                    </MudTd>
+                    <MudTd Style="text-align: right;">
+                        @context.TaxPaid.ToString("C2")
+                    </MudTd>
+                    <MudTd Style="text-align: right;">
+                        @{
+                            var netTax = context.NetTaxOwed - context.NetTaxCredit;
+                        }
+                        <MudText Typo="Typo.body2" Color="@(netTax >= 0 ? Color.Error : Color.Success)">
+                            <strong>@netTax.ToString("C2")</strong>
+                        </MudText>
+                    </MudTd>
+                </RowTemplate>
+                <FooterContent>
+                    <MudTd Style="background-color: #e0e0e0;"><strong>TOTALS</strong></MudTd>
+                    <MudTd Style="text-align: right; background-color: #e0e0e0;">
+                        <strong>@_report.TotalMiles.ToString("N0")</strong>
+                    </MudTd>
+                    <MudTd Style="text-align: right; background-color: #e0e0e0;">
+                        <strong>@_report.TotalGallons.ToString("N1")</strong>
+                    </MudTd>
+                    <MudTd Style="background-color: #e0e0e0;"></MudTd>
+                    <MudTd Style="background-color: #e0e0e0;"></MudTd>
+                    <MudTd Style="text-align: right; background-color: #e0e0e0;">
+                        <strong>@_report.TotalTaxOwed.ToString("C2")</strong>
+                    </MudTd>
+                    <MudTd Style="text-align: right; background-color: #e0e0e0;">
+                        <strong>@_report.TotalTaxCredit.ToString("C2")</strong>
+                    </MudTd>
+                    <MudTd Style="text-align: right; background-color: #e0e0e0;">
+                        <MudText Typo="Typo.h6" Color="@(_report.NetIFTATax >= 0 ? Color.Error : Color.Success)">
+                            @_report.NetIFTATax.ToString("C2")
+                        </MudText>
+                    </MudTd>
+                </FooterContent>
+            </MudTable>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- Net Tax Summary -->
+    <MudCard Elevation="3" Class="mb-3" Style="@($"border-left: 5px solid {(_report.NetIFTATax >= 0 ? "#f44336" : "#4caf50")};")">
+        <MudCardContent>
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="pa-3">
+                <div>
+                    <MudText Typo="Typo.h5">
+                        @(_report.NetIFTATax >= 0 ? "NET IFTA TAX DUE" : "NET IFTA TAX CREDIT")
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @(_report.NetIFTATax >= 0 
+                            ? "Amount to remit with IFTA return" 
+                            : "Credit/refund expected from jurisdictions")
+                    </MudText>
+                </div>
+                <MudText Typo="Typo.h3" Color="@(_report.NetIFTATax >= 0 ? Color.Error : Color.Success)">
+                    @Math.Abs(_report.NetIFTATax).ToString("C2")
+                </MudText>
+            </MudStack>
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- Efficiency Metrics -->
+    <MudCard Elevation="3" Class="mb-3">
+        <MudCardHeader Style="background-color: #4caf50; color: white;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">EFFICIENCY METRICS</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Average MPG</MudText>
+                        <MudText Typo="Typo.h5">@_report.FleetMPG.ToString("N2")</MudText>
+                        <MudProgressLinear Value="@GetMPGProgress()" Color="Color.Success" Size="Size.Medium" />
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">States Traveled</MudText>
+                        <MudText Typo="Typo.h5">@_report.StateData.Count</MudText>
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Avg Cost per Gallon</MudText>
+                        <MudText Typo="Typo.h5">@GetAvgCostPerGallon().ToString("C2")</MudText>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+}
+else
+{
+    <MudAlert Severity="Severity.Info">
+        Select a year and quarter, then click "Run Report" to generate the IFTA Report.
+    </MudAlert>
+}
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "year")]
+    public int? YearParam { get; set; }
+    
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "quarter")]
+    public int? QuarterParam { get; set; }
+    
+    private IFTAQuarterlyReport? _report;
+    private CoreCompanySettings _companySettings = new();
+    private List<Truck> _trucks = new();
+    
+    private bool _loading = false;
+    private int _selectedYear = DateTime.Now.Year;
+    private int _selectedQuarter = (DateTime.Now.Month - 1) / 3 + 1;
+    private string _selectedTruckId = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check for URL parameters
+        if (YearParam.HasValue) _selectedYear = YearParam.Value;
+        if (QuarterParam.HasValue) _selectedQuarter = QuarterParam.Value;
+        
+        await LoadTrucksAsync();
+        await LoadCompanySettingsAsync();
+        
+        // Auto-run if parameters provided
+        if (YearParam.HasValue && QuarterParam.HasValue)
+        {
+            await RunReportAsync();
+        }
+    }
+
+    private async Task LoadTrucksAsync()
+    {
+        try
+        {
+            _trucks = await UnitOfWork.Trucks.GetQueryable()
+                .OrderBy(t => t.TruckId)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading trucks: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadCompanySettingsAsync()
+    {
+        try
+        {
+            _companySettings = await UnitOfWork.CompanySettings.GetQueryable().FirstOrDefaultAsync()
+                ?? new CoreCompanySettings { CompanyName = "Your Company" };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading company settings: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RunReportAsync()
+    {
+        try
+        {
+            _loading = true;
+            
+            // Calculate quarter date range
+            var startMonth = (_selectedQuarter - 1) * 3 + 1;
+            var startDate = new DateTime(_selectedYear, startMonth, 1);
+            var endDate = startDate.AddMonths(3).AddDays(-1);
+            
+            _report = await GenerateIFTAReportAsync(startDate, endDate);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error generating report: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task<IFTAQuarterlyReport> GenerateIFTAReportAsync(DateTime startDate, DateTime endDate)
+    {
+        var report = new IFTAQuarterlyReport
+        {
+            Year = _selectedYear,
+            Quarter = _selectedQuarter,
+            StartDate = startDate,
+            EndDate = endDate,
+            FilingDeadline = GetFilingDeadline(_selectedYear, _selectedQuarter)
+        };
+        
+        // Set truck info if specific truck selected
+        if (!string.IsNullOrEmpty(_selectedTruckId))
+        {
+            var truck = _trucks.FirstOrDefault(t => t.TruckId == _selectedTruckId);
+            if (truck != null)
+            {
+                report.TruckId = truck.TruckId;
+                report.VIN = truck.VIN;
+            }
+        }
+        
+        // Get loads for the period
+        var loadsQuery = UnitOfWork.Loads.GetQueryable()
+            .Where(l => l.DeliveryDate.HasValue && 
+                       l.DeliveryDate.Value >= startDate && 
+                       l.DeliveryDate.Value <= endDate);
+        
+        if (!string.IsNullOrEmpty(_selectedTruckId))
+        {
+            loadsQuery = loadsQuery.Where(l => l.TruckId == _selectedTruckId);
+        }
+        
+        var loads = await loadsQuery.ToListAsync();
+        
+        // Get fuel entries for the period
+        var fuelQuery = UnitOfWork.FuelEntries.GetQueryable()
+            .Where(f => f.FuelDate >= startDate && f.FuelDate <= endDate);
+        
+        if (!string.IsNullOrEmpty(_selectedTruckId))
+        {
+            fuelQuery = fuelQuery.Where(f => f.TruckId == _selectedTruckId);
+        }
+        
+        var fuelEntries = await fuelQuery.ToListAsync();
+
+        // Calculate fleet MPG
+        var totalMiles = loads.Sum(l => l.Miles);
+        var totalGallons = fuelEntries.Sum(f => f.Gallons);
+        var fleetMPG = totalGallons > 0 ? (double)totalMiles / (double)totalGallons : 0;
+
+        // Get tax rates
+        var taxRates = IFTATaxRates.GetStateFuelTaxRates();
+        var stateNames = IFTATaxRates.GetStateFullNames();
+
+        // Group loads by state (using PickupState for simplicity)
+        var milesByState = loads
+            .GroupBy(l => l.PickupState ?? "Unknown")
+            .ToDictionary(g => g.Key, g => g.Sum(l => l.Miles));
+
+        // Group fuel by state
+        var fuelByState = fuelEntries
+            .GroupBy(f => f.State ?? "Unknown")
+            .ToDictionary(g => g.Key, g => new { Gallons = g.Sum(f => f.Gallons), Cost = g.Sum(f => f.TotalCost) });
+
+        // Create state data entries
+        var allStates = milesByState.Keys.Union(fuelByState.Keys).Distinct();
+
+        foreach (var state in allStates.Where(s => s != "Unknown"))
+        {
+            var miles = milesByState.GetValueOrDefault(state, 0);
+            var fuel = fuelByState.GetValueOrDefault(state, new { Gallons = 0m, Cost = 0m });
+            var taxRate = taxRates.GetValueOrDefault(state, 0);
+            var fullName = stateNames.GetValueOrDefault(state, state);
+
+            var stateData = new IFTAStateData
+            {
+                State = state,
+                StateFullName = fullName,
+                MilesDriven = miles,
+                GallonsPurchased = fuel.Gallons,
+                StateFuelTaxRate = taxRate,
+                FleetMPG = fleetMPG
+            };
+            
+            // Calculate tax paid on fuel purchased (tax rate * gallons)
+            stateData.TaxPaidOnPurchase = (fuel.Gallons * taxRate) / 100;
+            
+            report.StateData.Add(stateData);
+        }
+        
+        return report;
+    }
+
+    private DateTime GetFilingDeadline(int year, int quarter)
+    {
+        // IFTA filing deadlines: last day of month following quarter end
+        return quarter switch
+        {
+            1 => new DateTime(year, 4, 30),  // Q1 due April 30
+            2 => new DateTime(year, 7, 31),  // Q2 due July 31
+            3 => new DateTime(year, 10, 31), // Q3 due October 31
+            4 => new DateTime(year + 1, 1, 31), // Q4 due January 31
+            _ => DateTime.Today.AddMonths(1)
+        };
+    }
+
+    private Severity GetDeadlineSeverity()
+    {
+        if (_report == null) return Severity.Info;
+        
+        var daysUntil = GetDaysUntilDeadline();
+        
+        if (_report.IsFiled) return Severity.Success;
+        if (daysUntil < 0) return Severity.Error;
+        if (daysUntil <= 7) return Severity.Warning;
+        return Severity.Info;
+    }
+
+    private int GetDaysUntilDeadline()
+    {
+        if (_report == null) return 0;
+        return (_report.FilingDeadline - DateTime.Today).Days;
+    }
+
+    private double GetMPGProgress()
+    {
+        // Typical diesel truck MPG is 5-8. Show progress where 7 is 100%
+        return Math.Min(100, (_report?.FleetMPG ?? 0) / 7.0 * 100);
+    }
+
+    private decimal GetAvgCostPerGallon()
+    {
+        if (_report == null || _report.TotalGallons == 0) return 0;
+        
+        var totalCost = _report.StateData.Sum(s => s.TaxPaid);
+        return totalCost / _report.TotalGallons;
+    }
+
+    private void PrintReport()
+    {
+        Snackbar.Add("Print functionality coming soon", Severity.Info);
+    }
+
+    private async Task ExportToPDFAsync()
+    {
+        try
+        {
+            if (_report == null) return;
+            
+            var pdfBytes = await PdfService.GenerateIFTAReportAsync(_report, _companySettings);
+            
+            var fileName = $"IFTA_Q{_selectedQuarter}_{_selectedYear}.pdf";
+            Snackbar.Add("PDF generated successfully", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error generating PDF: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ExportToCSVAsync()
+    {
+        try
+        {
+            if (_report == null) return;
+            
+            // Generate CSV format for IFTA software import
+            var csv = new System.Text.StringBuilder();
+            csv.AppendLine("State,Miles,Gallons Purchased,Tax Rate,Tax Owed,Tax Paid,Net Tax");
+            
+            foreach (var state in _report.StateData.OrderBy(s => s.State))
+            {
+                var netTax = state.NetTaxOwed - state.NetTaxCredit;
+                csv.AppendLine($"{state.State},{state.MilesDriven},{state.GallonsPurchased:N2},{state.StateFuelTaxRate},{state.TaxOwed:N2},{state.TaxPaid:N2},{netTax:N2}");
+            }
+            
+            // TODO: Implement file download
+            Snackbar.Add("CSV export functionality coming soon", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error exporting CSV: {ex.Message}", Severity.Error);
+        }
+    }
+}

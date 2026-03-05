@@ -1,0 +1,304 @@
+@page "/sync-status"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Interfaces
+@inject IOfflineQueueService QueueService
+@inject IConnectivityService ConnectivityService
+@inject ISnackbar Snackbar
+
+<PageTitle>Sync Status - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Sync" Class="mr-2" />
+    Sync Status
+</MudText>
+
+<MudGrid>
+    <!-- Connection Status Card -->
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="3">
+            <MudCardContent>
+                <MudStack Spacing="3">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        @if (_isConnected)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.CloudDone" Color="Color.Success" Size="Size.Large" />
+                            <div>
+                                <MudText Typo="Typo.h6" Color="Color.Success">Connected</MudText>
+                                <MudText Typo="Typo.body2">You are online</MudText>
+                            </div>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.CloudOff" Color="Color.Warning" Size="Size.Large" />
+                            <div>
+                                <MudText Typo="Typo.h6" Color="Color.Warning">Offline</MudText>
+                                <MudText Typo="Typo.body2">Working in offline mode</MudText>
+                            </div>
+                        }
+                    </MudStack>
+                    
+                    @if (!_isConnected)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true">
+                            Operations will be queued and processed when connection is restored.
+                        </MudAlert>
+                    }
+                </MudStack>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Pending Operations Card -->
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="3">
+            <MudCardContent>
+                <MudStack Spacing="3">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@Icons.Material.Filled.CloudQueue" 
+                                Color="@(_pendingOperations.Count > 0 ? Color.Info : Color.Success)" 
+                                Size="Size.Large" />
+                        <div>
+                            <MudText Typo="Typo.h6">Pending Operations</MudText>
+                            <MudText Typo="Typo.h4">@_pendingOperations.Count</MudText>
+                        </div>
+                    </MudStack>
+                    
+                    @if (_isConnected && _pendingOperations.Count > 0)
+                    {
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Primary" 
+                                  StartIcon="@Icons.Material.Filled.Sync"
+                                  OnClick="ProcessQueueAsync"
+                                  Disabled="@_processing">
+                            @if (_processing)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                <span class="ml-2">Processing...</span>
+                            }
+                            else
+                            {
+                                <span>Process Now</span>
+                            }
+                        </MudButton>
+                    }
+                </MudStack>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Pending Operations List -->
+    @if (_pendingOperations.Any())
+    {
+        <MudItem xs="12">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Queued Operations</MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                        <MudButton Variant="Variant.Text" 
+                                  Color="Color.Default" 
+                                  StartIcon="@Icons.Material.Filled.Delete"
+                                  OnClick="ClearCompletedAsync">
+                            Clear Completed
+                        </MudButton>
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudTable Items="@_pendingOperations" Dense="true" Hover="true" Elevation="0">
+                        <HeaderContent>
+                            <MudTh>Type</MudTh>
+                            <MudTh>Queued At</MudTh>
+                            <MudTh>Status</MudTh>
+                            <MudTh>Retries</MudTh>
+                            <MudTh>Error</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                    <MudIcon Icon="@GetOperationIcon(context.OperationType)" Size="Size.Small" />
+                                    <span>@context.OperationType</span>
+                                </MudStack>
+                            </MudTd>
+                            <MudTd>@context.QueuedAt.ToString("MM/dd/yyyy HH:mm")</MudTd>
+                            <MudTd>
+                                <MudChip T="string" 
+                                        Size="Size.Small" 
+                                        Color="@GetStatusColor(context.Status)">
+                                    @context.Status
+                                </MudChip>
+                            </MudTd>
+                            <MudTd>@context.RetryCount / @context.MaxRetries</MudTd>
+                            <MudTd>
+                                @if (!string.IsNullOrEmpty(context.ErrorMessage))
+                                {
+                                    <MudTooltip Text="@context.ErrorMessage">
+                                        <MudIcon Icon="@Icons.Material.Filled.Error" Color="Color.Error" Size="Size.Small" />
+                                    </MudTooltip>
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    }
+    else
+    {
+        <MudItem xs="12">
+            <MudAlert Severity="Severity.Success">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" />
+                    <div>
+                        <MudText Typo="Typo.h6">All synced!</MudText>
+                        <MudText Typo="Typo.body2">There are no pending operations.</MudText>
+                    </div>
+                </MudStack>
+            </MudAlert>
+        </MudItem>
+    }
+    
+    <!-- Tips Card -->
+    <MudItem xs="12">
+        <MudCard Elevation="3">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">
+                        <MudIcon Icon="@Icons.Material.Filled.Lightbulb" Class="mr-2" />
+                        Offline Mode Tips
+                    </MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudList Dense="true" T="string">
+                    <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                        All data is stored locally and available offline
+                    </MudListItem>
+                    <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                        You can add loads, expenses, and maintenance records offline
+                    </MudListItem>
+                    <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                        Email sending will be queued when offline
+                    </MudListItem>
+                    <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                        Operations are automatically processed when connection is restored
+                    </MudListItem>
+                    <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                        Failed operations will retry up to 3 times
+                    </MudListItem>
+                </MudList>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private bool _isConnected = true;
+    private bool _processing = false;
+    private List<QueuedOperation> _pendingOperations = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isConnected = ConnectivityService.IsConnected;
+        await LoadPendingOperationsAsync();
+
+        ConnectivityService.ConnectivityChanged += OnConnectivityChanged;
+        QueueService.PendingCountChanged += OnPendingCountChanged;
+        ConnectivityService.StartMonitoring();
+    }
+
+    private async Task LoadPendingOperationsAsync()
+    {
+        try
+        {
+            _pendingOperations = await QueueService.GetPendingOperationsAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading operations: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ProcessQueueAsync()
+    {
+        try
+        {
+            _processing = true;
+            await QueueService.ProcessQueueAsync();
+            await LoadPendingOperationsAsync();
+            Snackbar.Add("Queue processed successfully", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error processing queue: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private async Task ClearCompletedAsync()
+    {
+        try
+        {
+            await QueueService.ClearCompletedAsync();
+            await LoadPendingOperationsAsync();
+            Snackbar.Add("Completed operations cleared", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error clearing operations: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void OnConnectivityChanged(object? sender, bool isConnected)
+    {
+        _isConnected = isConnected;
+        InvokeAsync(async () =>
+        {
+            await LoadPendingOperationsAsync();
+            StateHasChanged();
+        });
+    }
+
+    private void OnPendingCountChanged(object? sender, int count)
+    {
+        InvokeAsync(async () =>
+        {
+            await LoadPendingOperationsAsync();
+            StateHasChanged();
+        });
+    }
+
+    private string GetOperationIcon(OperationType type)
+    {
+        return type switch
+        {
+            OperationType.SendEmail => Icons.Material.Filled.Email,
+            OperationType.CloudBackup => Icons.Material.Filled.CloudUpload,
+            OperationType.SyncData => Icons.Material.Filled.Sync,
+            _ => Icons.Material.Filled.Help
+        };
+    }
+
+    private Color GetStatusColor(OperationStatus status)
+    {
+        return status switch
+        {
+            OperationStatus.Pending => Color.Default,
+            OperationStatus.Processing => Color.Info,
+            OperationStatus.Completed => Color.Success,
+            OperationStatus.Failed => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    public void Dispose()
+    {
+        ConnectivityService.ConnectivityChanged -= OnConnectivityChanged;
+        QueueService.PendingCountChanged -= OnPendingCountChanged;
+    }
+}

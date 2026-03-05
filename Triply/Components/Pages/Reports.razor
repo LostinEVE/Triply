@@ -1,0 +1,239 @@
+@page "/reports"
+@using MudBlazor
+@inject NavigationManager NavigationManager
+
+<PageTitle>Reports - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Assessment" Class="mr-2" />
+    Reports & Analytics
+</MudText>
+
+<MudText Typo="Typo.body1" Class="mb-4 mud-text-secondary">
+    Select a report type to view detailed financial and operational insights
+</MudText>
+
+<MudGrid>
+    <!-- Profit & Loss Report -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/reports/profit-loss"))">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.TrendingUp" 
+                            Size="Size.Large" 
+                            Color="Color.Success" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        Profit & Loss
+                    </MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                        Income statement with revenue, expenses, and net profit analysis
+                    </MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Success" 
+                          FullWidth="true"
+                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                    View Report
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Tax Summary Report -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/reports/tax-summary"))">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.AccountBalance" 
+                            Size="Size.Large" 
+                            Color="Color.Warning" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        Tax Summary
+                    </MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                        Quarterly tax estimates, deductions, and estimated tax payments
+                    </MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Warning" 
+                          FullWidth="true"
+                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                    View Report
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Maintenance Report -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/reports/maintenance"))">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Build" 
+                            Size="Size.Large" 
+                            Color="Color.Primary" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        Maintenance
+                    </MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                        Maintenance history, costs, and upcoming scheduled services
+                    </MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Primary" 
+                          FullWidth="true"
+                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                    View Report
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+    
+    <!-- IFTA Report -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/reports/ifta"))">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.LocalGasStation" 
+                            Size="Size.Large" 
+                            Color="Color.Info" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        IFTA Report
+                    </MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                        International Fuel Tax Agreement quarterly reporting by jurisdiction
+                    </MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Info" 
+                          FullWidth="true"
+                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                    View Report
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Expense Report -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/expenses"))">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Receipt" 
+                            Size="Size.Large" 
+                            Color="Color.Error" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        Expense Report
+                    </MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                        Detailed expense tracking by category, truck, and time period
+                    </MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Error" 
+                          FullWidth="true"
+                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                    View Report
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Accounts Receivable Aging -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/invoices"))">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.MonetizationOn" 
+                            Size="Size.Large" 
+                            Color="Color.Secondary" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        AR Aging
+                    </MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                        Accounts receivable aging analysis by customer
+                    </MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Secondary" 
+                          FullWidth="true"
+                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                    View Report
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Cost Per Mile Analysis -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/reports/cpm"))">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.ShowChart" 
+                            Size="Size.Large" 
+                            Color="Color.Tertiary" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        Cost Per Mile
+                    </MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                        Detailed CPM analysis with historical trends and comparisons
+                    </MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Tertiary" 
+                          FullWidth="true"
+                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                    View Report
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+    
+    <!-- Maintenance Summary (from previous) -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/maintenance/summary"))">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Analytics" 
+                            Size="Size.Large" 
+                            Color="Color.Dark" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        Maintenance Analytics
+                    </MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                        Maintenance cost analysis, frequency, and vendor comparison
+                    </MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Dark" 
+                          FullWidth="true"
+                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                    View Report
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+    }
+}

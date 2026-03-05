@@ -1,0 +1,110 @@
+@using MudBlazor
+@using Triply.Core.Models
+@using Triply.Core.Enums
+
+<MudCard Elevation="@Elevation" Class="@Class" Style="@Style">
+    <MudCardContent>
+        <MudStack Spacing="2">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.h6">@Truck.TruckId</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @Truck.Make @Truck.Model @Truck.Year
+                    </MudText>
+                </MudStack>
+                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(Truck.Status)">
+                    @Truck.Status
+                </MudChip>
+            </MudStack>
+            
+            @if (ShowDetails)
+            {
+                <MudDivider />
+                
+                <MudStack Spacing="1">
+                    @if (!string.IsNullOrEmpty(Truck.VIN))
+                    {
+                        <MudText Typo="Typo.body2">
+                            <strong>VIN:</strong> @Truck.VIN
+                        </MudText>
+                    }
+                    
+                    @if (!string.IsNullOrEmpty(Truck.LicensePlate))
+                    {
+                        <MudText Typo="Typo.body2">
+                            <strong>Plate:</strong> @Truck.LicensePlate
+                        </MudText>
+                    }
+                    
+                    @if (Truck.CurrentOdometer > 0)
+                    {
+                        <MudText Typo="Typo.body2">
+                            <strong>Odometer:</strong> @Truck.CurrentOdometer.ToString("N0") miles
+                        </MudText>
+                    }
+                </MudStack>
+            }
+            
+            @if (ShowActions)
+            {
+                <MudDivider />
+                
+                <MudStack Row="true" Spacing="2">
+                    <MudButton Variant="Variant.Text" 
+                              Size="Size.Small" 
+                              Color="Color.Primary"
+                              StartIcon="@Icons.Material.Filled.Visibility"
+                              OnClick="@(() => OnViewDetails.InvokeAsync(Truck))">
+                        View
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" 
+                              Size="Size.Small" 
+                              Color="Color.Info"
+                              StartIcon="@Icons.Material.Filled.Edit"
+                              OnClick="@(() => OnEdit.InvokeAsync(Truck))">
+                        Edit
+                    </MudButton>
+                </MudStack>
+            }
+        </MudStack>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public Truck Truck { get; set; } = null!;
+    
+    [Parameter]
+    public bool ShowDetails { get; set; } = true;
+    
+    [Parameter]
+    public bool ShowActions { get; set; } = false;
+    
+    [Parameter]
+    public int Elevation { get; set; } = 2;
+    
+    [Parameter]
+    public string? Class { get; set; }
+    
+    [Parameter]
+    public string? Style { get; set; }
+    
+    [Parameter]
+    public EventCallback<Truck> OnViewDetails { get; set; }
+    
+    [Parameter]
+    public EventCallback<Truck> OnEdit { get; set; }
+
+    private Color GetStatusColor(TruckStatus status)
+    {
+        return status switch
+        {
+            TruckStatus.Active => Color.Success,
+            TruckStatus.InShop => Color.Warning,
+            TruckStatus.Inactive => Color.Default,
+            TruckStatus.Sold => Color.Default,
+            _ => Color.Default
+        };
+    }
+}

@@ -1,0 +1,869 @@
+@page "/"
+@page "/dashboard"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@using Triply.Services
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject AccountingService AccountingService
+@inject InvoiceService InvoiceService
+@inject CostPerMileService CostPerMileService
+@inject IUnitOfWork UnitOfWork
+
+<PageTitle>Dashboard - Triply</PageTitle>
+
+@if (_isLoading)
+{
+    <MudGrid Spacing="3">
+        @for (int i = 0; i < 4; i++)
+        {
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="80px" />
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+else
+{
+    <MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.Dashboard" Class="mr-2" />
+        Dashboard
+        <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-2">@DateTime.Now.ToString("MMMM yyyy")</MudChip>
+    </MudText>
+
+    <MudGrid Spacing="3">
+        <!-- KEY METRICS CARDS -->
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3" Class="cursor-pointer hover-card" @onclick="@(() => NavigateTo("/reports/profit-loss"))">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Total Revenue</MudText>
+                            <MudText Typo="Typo.h4" Color="Color.Success">@_metrics.TotalRevenue.ToString("C0")</MudText>
+                            <MudText Typo="Typo.caption" Color="@(_metrics.RevenueChange >= 0 ? Color.Success : Color.Error)">
+                                @(_metrics.RevenueChange >= 0 ? "▲" : "▼") @Math.Abs(_metrics.RevenueChange).ToString("N1")% vs last month
+                            </MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Large" Color="Color.Success" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3" Class="cursor-pointer hover-card" @onclick="@(() => NavigateTo("/expenses"))">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Total Expenses</MudText>
+                            <MudText Typo="Typo.h4" Color="Color.Error">@_metrics.TotalExpenses.ToString("C0")</MudText>
+                            <MudText Typo="Typo.caption" Color="@(_metrics.ExpenseChange <= 0 ? Color.Success : Color.Warning)">
+                                @(_metrics.ExpenseChange >= 0 ? "▲" : "▼") @Math.Abs(_metrics.ExpenseChange).ToString("N1")% vs last month
+                            </MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Large" Color="Color.Error" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3" Class="cursor-pointer hover-card" @onclick="@(() => NavigateTo("/reports/profit-loss"))">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Net Profit</MudText>
+                            <MudText Typo="Typo.h4" Color="@(_metrics.NetProfit >= 0 ? Color.Primary : Color.Error)">
+                                @_metrics.NetProfit.ToString("C0")
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @_metrics.ProfitMargin.ToString("N1")% margin
+                            </MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.ShowChart" Size="Size.Large" Color="Color.Primary" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="3" Class="cursor-pointer hover-card" @onclick="@(() => NavigateTo("/reports/aging"))">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Outstanding AR</MudText>
+                            <MudText Typo="Typo.h4" Color="Color.Warning">@_metrics.OutstandingAR.ToString("C0")</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @_metrics.InvoiceCount invoices
+                            </MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Size="Size.Large" Color="Color.Warning" />
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- QUICK STATS ROW -->
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudStack Spacing="1">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                            <MudIcon Icon="@Icons.Material.Filled.Speed" Color="Color.Info" />
+                            <MudText Typo="Typo.h5">@_quickStats.TotalMiles.ToString("N0")</MudText>
+                        </MudStack>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Total Miles</MudText>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="2" Class="cursor-pointer hover-card" @onclick="@(() => NavigateTo("/reports/cpm"))">
+                <MudCardContent>
+                    <MudStack Spacing="1">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                            <MudIcon Icon="@Icons.Material.Filled.MonetizationOn" Color="Color.Success" />
+                            <MudText Typo="Typo.h5">@_quickStats.CostPerMile.ToString("C2")</MudText>
+                        </MudStack>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Cost Per Mile</MudText>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard Elevation="2" Class="cursor-pointer hover-card" @onclick="@(() => NavigateTo("/trucks"))">
+                <MudCardContent>
+                    <MudStack Spacing="1">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                            <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Color="Color.Primary" />
+                            <MudText Typo="Typo.h5">@_quickStats.ActiveTrucks</MudText>
+                        </MudStack>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Active Trucks</MudText>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            @{
+                var cardClass = "cursor-pointer hover-card";
+                if (_quickStats.OverdueInvoices > 0)
+                {
+                    cardClass += " border-error";
+                }
+            }
+            <MudCard Elevation="2" 
+                     Class="@cardClass" 
+                     @onclick="@(() => NavigateTo("/invoices?filter=overdue"))">
+                <MudCardContent>
+                    <MudStack Spacing="1">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                            <MudIcon Icon="@Icons.Material.Filled.Warning" Color="@(_quickStats.OverdueInvoices > 0 ? Color.Error : Color.Success)" />
+                            <MudText Typo="Typo.h5" Color="@(_quickStats.OverdueInvoices > 0 ? Color.Error : Color.Success)">
+                                @_quickStats.OverdueInvoices
+                            </MudText>
+                        </MudStack>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Overdue Invoices</MudText>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- NOTIFICATIONS/ALERTS PANEL -->
+        <MudItem xs="12" md="4">
+            <NotificationsPanel MaxItems="5" />
+        </MudItem>
+
+        <!-- CHARTS SECTION -->
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.BarChart" Class="mr-2" />
+                            Revenue vs Expenses (Last 6 Months)
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_revenueExpenseData.Any())
+                    {
+                        <MudChart ChartType="ChartType.Bar" 
+                                 ChartSeries="@_revenueExpenseSeries" 
+                                 XAxisLabels="@_revenueExpenseLabels"
+                                 Width="100%" 
+                                 Height="350px"
+                                 ChartOptions="@_chartOptions" />
+                    }
+                    else
+                    {
+                        <MudText Align="Align.Center" Class="pa-4">No data available</MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.PieChart" Class="mr-2" />
+                            Expense Breakdown
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_expenseBreakdownData.Any())
+                    {
+                        <MudChart T="double" 
+                                 ChartType="ChartType.Donut" 
+                                 InputData="@_expenseBreakdownData" 
+                                 InputLabels="@_expenseBreakdownLabels"
+                                 Width="100%" 
+                                 Height="300px" />
+                    }
+                    else
+                    {
+                        <MudText Align="Align.Center" Class="pa-4">No expenses this month</MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.Timeline" Class="mr-2" />
+                            Cost Per Mile Trend
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_cpmTrendData.Any())
+                    {
+                        <MudChart ChartType="ChartType.Line" 
+                                 ChartSeries="@_cpmTrendSeries" 
+                                 XAxisLabels="@_cpmTrendLabels"
+                                 Width="100%" 
+                                 Height="250px"
+                                 ChartOptions="@_chartOptions" />
+                    }
+                    else
+                    {
+                        <MudText Align="Align.Center" Class="pa-4">No CPM data available</MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- RECENT ACTIVITY & ALERTS -->
+        <MudItem xs="12" md="7">
+            <MudCard Elevation="3" Style="height: 500px;">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.History" Class="mr-2" />
+                            Recent Activity
+                        </MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" 
+                                      Color="Color.Default" 
+                                      OnClick="@LoadRecentActivityAsync" />
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent Class="pa-0" Style="max-height: 400px; overflow-y: auto;">
+                    @if (_recentActivity.Any())
+                    {
+                        <MudList T="string" Clickable="true" Dense="true">
+                            @foreach (var activity in _recentActivity)
+                            {
+                                <MudListItem T="string" 
+                                            Icon="@GetActivityIcon(activity.Type)" 
+                                            IconColor="@GetActivityColor(activity.Type)"
+                                            OnClick="@(() => NavigateToActivity(activity))">
+                                    <MudStack Spacing="0">
+                                        <MudText Typo="Typo.body2">
+                                            <strong>@activity.Title</strong>
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            @activity.Description • @activity.Date.ToString("MMM dd, yyyy h:mm tt")
+                                        </MudText>
+                                        @if (activity.Amount.HasValue)
+                                        {
+                                            <MudText Typo="Typo.body2" Color="@(activity.Amount > 0 ? Color.Success : Color.Error)">
+                                                @activity.Amount.Value.ToString("C2")
+                                            </MudText>
+                                        }
+                                    </MudStack>
+                                </MudListItem>
+                                <MudDivider />
+                            }
+                        </MudList>
+                    }
+                    else
+                    {
+                        <MudText Align="Align.Center" Class="pa-8">No recent activity</MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <MudCard Elevation="3" Style="height: 500px;">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.Notifications" Class="mr-2" />
+                            Alerts & Notifications
+                            @if (_alerts.Any(a => a.Severity == Severity.Error))
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-2">
+                                    @_alerts.Count(a => a.Severity == Severity.Error)
+                                </MudChip>
+                            }
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent Style="max-height: 400px; overflow-y: auto;">
+                    @if (_alerts.Any())
+                    {
+                        <MudStack Spacing="2">
+                            @foreach (var alert in _alerts.OrderByDescending(a => a.Severity))
+                            {
+                                <MudAlert Severity="@alert.Severity" 
+                                         Variant="Variant.Filled" 
+                                         Dense="true"
+                                         ShowCloseIcon="false"
+                                         Class="cursor-pointer"
+                                         @onclick="@(() => NavigateTo(alert.Link))">
+                                    <MudText Typo="Typo.body2">
+                                        <strong>@alert.Title</strong>
+                                    </MudText>
+                                    <MudText Typo="Typo.caption">
+                                        @alert.Message
+                                    </MudText>
+                                </MudAlert>
+                            }
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Success" Dense="true">
+                            <MudText Typo="Typo.body2">
+                                ✓ All systems running smoothly
+                            </MudText>
+                        </MudAlert>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- QUICK ACTIONS -->
+        <MudItem xs="12">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.FlashOn" Class="mr-2" />
+                            Quick Actions
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap">
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Error" 
+                                  StartIcon="@Icons.Material.Filled.Receipt"
+                                  Size="Size.Large"
+                                  OnClick="@(() => NavigateTo("/expenses/add"))">
+                            Add Expense
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Warning" 
+                                  StartIcon="@Icons.Material.Filled.LocalGasStation"
+                                  Size="Size.Large"
+                                  OnClick="@(() => NavigateTo("/fuel/add"))">
+                            Add Fuel
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Success" 
+                                  StartIcon="@Icons.Material.Filled.Description"
+                                  Size="Size.Large"
+                                  OnClick="@(() => NavigateTo("/invoices/create"))">
+                            Create Invoice
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Primary" 
+                                  StartIcon="@Icons.Material.Filled.Add"
+                                  Size="Size.Large"
+                                  OnClick="@(() => NavigateTo("/loads/add"))">
+                            New Load
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Info" 
+                                  StartIcon="@Icons.Material.Filled.Assessment"
+                                  Size="Size.Large"
+                                  OnClick="@(() => NavigateTo("/reports"))">
+                            View Reports
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Secondary" 
+                                  StartIcon="@Icons.Material.Filled.Build"
+                                  Size="Size.Large"
+                                  OnClick="@(() => NavigateTo("/maintenance/add"))">
+                            Log Maintenance
+                        </MudButton>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private bool _isLoading = true;
+    
+    // Metrics
+    private DashboardMetrics _metrics = new();
+    private DashboardQuickStats _quickStats = new();
+    
+    // Charts
+    private List<ChartSeries<double>> _revenueExpenseSeries = new();
+    private string[] _revenueExpenseLabels = Array.Empty<string>();
+    private List<RevenueExpenseData> _revenueExpenseData = new();
+
+    private double[] _expenseBreakdownData = Array.Empty<double>();
+    private string[] _expenseBreakdownLabels = Array.Empty<string>();
+
+    private List<ChartSeries<double>> _cpmTrendSeries = new();
+    private string[] _cpmTrendLabels = Array.Empty<string>();
+    private List<CPMTrendPoint> _cpmTrendData = new();
+    
+    private ChartOptions _chartOptions = new();
+
+    // Activity & Alerts
+    private List<ActivityItem> _recentActivity = new();
+    private List<AlertItem> _alerts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadDashboardDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading dashboard: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadDashboardDataAsync()
+    {
+        var monthStart = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
+        var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+        
+        // Load all data in parallel
+        var metricsTask = LoadMetricsAsync(monthStart, monthEnd);
+        var quickStatsTask = LoadQuickStatsAsync(monthStart, monthEnd);
+        var chartsTask = LoadChartsDataAsync();
+        var activityTask = LoadRecentActivityAsync();
+        var alertsTask = LoadAlertsAsync();
+        
+        await Task.WhenAll(metricsTask, quickStatsTask, chartsTask, activityTask, alertsTask);
+    }
+
+    private async Task LoadMetricsAsync(DateTime startDate, DateTime endDate)
+    {
+        try
+        {
+            var incomeStatement = await AccountingService.GetIncomeStatementAsync(startDate, endDate);
+            
+            _metrics.TotalRevenue = incomeStatement.TotalRevenue;
+            _metrics.TotalExpenses = incomeStatement.TotalOperatingExpenses;
+            _metrics.NetProfit = incomeStatement.NetIncome;
+            _metrics.ProfitMargin = incomeStatement.NetProfitMargin;
+            
+            // Calculate changes vs last month
+            var lastMonthStart = startDate.AddMonths(-1);
+            var lastMonthEnd = startDate.AddDays(-1);
+            var lastMonth = await AccountingService.GetIncomeStatementAsync(lastMonthStart, lastMonthEnd);
+            
+            _metrics.RevenueChange = CalculatePercentChange(lastMonth.TotalRevenue, _metrics.TotalRevenue);
+            _metrics.ExpenseChange = CalculatePercentChange(lastMonth.TotalOperatingExpenses, _metrics.TotalExpenses);
+            
+            // Outstanding AR
+            var overdueInvoices = await InvoiceService.GetOverdueInvoicesAsync();
+            var pendingInvoices = await InvoiceService.GetInvoicesByStatusAsync(InvoiceStatus.Sent);
+            
+            _metrics.OutstandingAR = overdueInvoices.Sum(i => i.Balance) + pendingInvoices.Sum(i => i.Balance);
+            _metrics.InvoiceCount = overdueInvoices.Count + pendingInvoices.Count;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading metrics: {ex.Message}");
+        }
+    }
+
+    private async Task LoadQuickStatsAsync(DateTime startDate, DateTime endDate)
+    {
+        try
+        {
+            // Total miles
+            var loads = await UnitOfWork.Loads.GetQueryable()
+                .Where(l => l.PickupDate >= startDate && l.PickupDate <= endDate)
+                .ToListAsync();
+            _quickStats.TotalMiles = (int)loads.Sum(l => l.Miles);
+            
+            // CPM
+            var cpmReport = await CostPerMileService.CalculateCPMAsync(
+                startDate, 
+                endDate, 
+                truckId: null);
+            _quickStats.CostPerMile = cpmReport.TotalCPM;
+            
+            // Active trucks
+            var trucks = await UnitOfWork.Trucks.GetQueryable()
+                .Where(t => t.Status == TruckStatus.Active)
+                .CountAsync();
+            _quickStats.ActiveTrucks = trucks;
+            
+            // Overdue invoices
+            var overdue = await InvoiceService.GetOverdueInvoicesAsync();
+            _quickStats.OverdueInvoices = overdue.Count;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading quick stats: {ex.Message}");
+        }
+    }
+
+    private async Task LoadChartsDataAsync()
+    {
+        try
+        {
+            // Revenue vs Expenses (last 6 months)
+            var revenueData = new List<double>();
+            var expenseData = new List<double>();
+            var labels = new List<string>();
+            
+            for (int i = 5; i >= 0; i--)
+            {
+                var monthStart = DateTime.Now.AddMonths(-i).Date.AddDays(1 - DateTime.Now.Day);
+                var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+                
+                var statement = await AccountingService.GetIncomeStatementAsync(monthStart, monthEnd);
+                
+                revenueData.Add((double)statement.TotalRevenue);
+                expenseData.Add((double)statement.TotalOperatingExpenses);
+                labels.Add(monthStart.ToString("MMM yyyy"));
+                
+                _revenueExpenseData.Add(new RevenueExpenseData
+                {
+                    Month = monthStart.ToString("MMM yyyy"),
+                    Revenue = statement.TotalRevenue,
+                    Expenses = statement.TotalOperatingExpenses
+                });
+            }
+            
+            _revenueExpenseSeries = new List<ChartSeries<double>>
+            {
+                new ChartSeries<double> { Name = "Revenue", Data = revenueData.ToArray() },
+                new ChartSeries<double> { Name = "Expenses", Data = expenseData.ToArray() }
+            };
+            _revenueExpenseLabels = labels.ToArray();
+            
+            // Expense Breakdown (current month)
+            var monthStart2 = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
+            var monthEnd2 = monthStart2.AddMonths(1).AddDays(-1);
+            
+            var expenses = await UnitOfWork.Expenses.GetQueryable()
+                .Where(e => e.ExpenseDate >= monthStart2 && e.ExpenseDate <= monthEnd2)
+                .ToListAsync();
+            
+            var expensesByCategory = expenses
+                .GroupBy(e => e.Category.ToString())
+                .Select(g => new { Category = g.Key, Total = g.Sum(e => e.Amount) })
+                .OrderByDescending(x => x.Total)
+                .Take(6)
+                .ToList();
+            
+            _expenseBreakdownData = expensesByCategory.Select(x => (double)x.Total).ToArray();
+            _expenseBreakdownLabels = expensesByCategory.Select(x => x.Category).ToArray();
+            
+            // CPM Trend (last 6 months)
+            var cpmData = new List<double>();
+            var cpmLabels = new List<string>();
+            
+            for (int i = 5; i >= 0; i--)
+            {
+                var monthStart3 = DateTime.Now.AddMonths(-i).Date.AddDays(1 - DateTime.Now.Day);
+                var monthEnd3 = monthStart3.AddMonths(1).AddDays(-1);
+
+                var cpmReport = await CostPerMileService.CalculateCPMAsync(
+                    monthStart3, 
+                    monthEnd3, 
+                    truckId: null);
+
+                cpmData.Add((double)cpmReport.TotalCPM);
+                cpmLabels.Add(monthStart3.ToString("MMM"));
+                
+                _cpmTrendData.Add(new CPMTrendPoint
+                {
+                    Month = monthStart3.ToString("MMM yyyy"),
+                    CPM = cpmReport.TotalCPM
+                });
+            }
+            
+            _cpmTrendSeries = new List<ChartSeries<double>>
+            {
+                new ChartSeries<double> { Name = "Cost Per Mile", Data = cpmData.ToArray() }
+            };
+            _cpmTrendLabels = cpmLabels.ToArray();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading charts: {ex.Message}");
+        }
+    }
+
+    private async Task LoadRecentActivityAsync()
+    {
+        _recentActivity.Clear();
+        
+        try
+        {
+            // Get recent expenses
+            var expenses = await UnitOfWork.Expenses.GetQueryable()
+                .OrderByDescending(e => e.ExpenseDate)
+                .Take(5)
+                .ToListAsync();
+            
+            foreach (var expense in expenses)
+            {
+                _recentActivity.Add(new ActivityItem
+                {
+                    Type = "Expense",
+                    Title = $"Expense: {expense.Category}",
+                    Description = expense.Description ?? "",
+                    Date = expense.ExpenseDate,
+                    Amount = -expense.Amount,
+                    Link = $"/expenses/{expense.ExpenseId}"
+                });
+            }
+            
+            // Get recent invoices
+            var invoices = await UnitOfWork.Invoices.GetQueryable()
+                .OrderByDescending(i => i.InvoiceDate)
+                .Take(5)
+                .Include(i => i.Customer)
+                .ToListAsync();
+            
+            foreach (var invoice in invoices)
+            {
+                _recentActivity.Add(new ActivityItem
+                {
+                    Type = "Invoice",
+                    Title = $"Invoice {invoice.InvoiceNumber}",
+                    Description = $"{invoice.Customer?.CompanyName} - {invoice.Status}",
+                    Date = invoice.InvoiceDate,
+                    Amount = invoice.TotalAmount,
+                    Link = $"/invoices/{invoice.InvoiceId}"
+                });
+            }
+            
+            // Sort by date
+            _recentActivity = _recentActivity.OrderByDescending(a => a.Date).Take(10).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading activity: {ex.Message}");
+        }
+    }
+
+    private async Task LoadAlertsAsync()
+    {
+        _alerts.Clear();
+        
+        try
+        {
+            // Overdue invoices
+            var overdueInvoices = await InvoiceService.GetOverdueInvoicesAsync();
+            if (overdueInvoices.Any())
+            {
+                var totalOverdue = overdueInvoices.Sum(i => i.Balance);
+                _alerts.Add(new AlertItem
+                {
+                    Severity = Severity.Error,
+                    Title = $"{overdueInvoices.Count} Overdue Invoices",
+                    Message = $"Total: {totalOverdue:C0}. Follow up with customers immediately.",
+                    Link = "/invoices?filter=overdue"
+                });
+            }
+            
+            // Maintenance due soon
+            var trucks = await UnitOfWork.Trucks.GetQueryable().ToListAsync();
+            foreach (var truck in trucks)
+            {
+                // TODO: Add maintenance tracking fields to Truck model
+                // For now, skip maintenance alerts
+                /*
+                if (truck.NextServiceMileage.HasValue && truck.CurrentMileage.HasValue)
+                {
+                    var milesUntilService = truck.NextServiceMileage.Value - truck.CurrentMileage.Value;
+                    if (milesUntilService <= 500 && milesUntilService > 0)
+                    {
+                        _alerts.Add(new AlertItem
+                        {
+                            Severity = Severity.Warning,
+                            Title = $"Maintenance Due: {truck.TruckNumber}",
+                            Message = $"Service needed in {milesUntilService} miles",
+                            Link = $"/maintenance/add?truckId={truck.TruckId}"
+                        });
+                    }
+                }
+                */
+            }
+            
+            // IFTA report due
+            var today = DateTime.Now;
+            var quarterEnd = new DateTime(today.Year, ((today.Month - 1) / 3) * 3 + 3, 1).AddMonths(1).AddDays(-1);
+            var iftaDue = quarterEnd.AddDays(30);
+            
+            if (today.Month % 3 == 1 && today.Day <= 30)
+            {
+                _alerts.Add(new AlertItem
+                {
+                    Severity = Severity.Warning,
+                    Title = "IFTA Report Due",
+                    Message = $"Due by {iftaDue:MMMM d, yyyy}",
+                    Link = "/reports/ifta"
+                });
+            }
+            
+            // Quarterly tax estimate
+            if (today.Month % 3 == 0 && today.Day >= 1 && today.Day <= 15)
+            {
+                _alerts.Add(new AlertItem
+                {
+                    Severity = Severity.Info,
+                    Title = "Quarterly Tax Payment Due",
+                    Message = $"Estimated payment due by the 15th",
+                    Link = "/reports/tax"
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading alerts: {ex.Message}");
+        }
+    }
+
+    private decimal CalculatePercentChange(decimal oldValue, decimal newValue)
+    {
+        if (oldValue == 0) return 0;
+        return ((newValue - oldValue) / oldValue) * 100;
+    }
+
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+    }
+
+    private void NavigateToActivity(ActivityItem activity)
+    {
+        NavigationManager.NavigateTo(activity.Link);
+    }
+
+    private string GetActivityIcon(string type)
+    {
+        return type switch
+        {
+            "Expense" => Icons.Material.Filled.Receipt,
+            "Invoice" => Icons.Material.Filled.Description,
+            "Payment" => Icons.Material.Filled.Payment,
+            "Fuel" => Icons.Material.Filled.LocalGasStation,
+            _ => Icons.Material.Filled.Circle
+        };
+    }
+
+    private Color GetActivityColor(string type)
+    {
+        return type switch
+        {
+            "Expense" => Color.Error,
+            "Invoice" => Color.Success,
+            "Payment" => Color.Primary,
+            "Fuel" => Color.Warning,
+            _ => Color.Default
+        };
+    }
+
+    // DTOs
+    private class DashboardMetrics
+    {
+        public decimal TotalRevenue { get; set; }
+        public decimal TotalExpenses { get; set; }
+        public decimal NetProfit { get; set; }
+        public decimal ProfitMargin { get; set; }
+        public decimal OutstandingAR { get; set; }
+        public int InvoiceCount { get; set; }
+        public decimal RevenueChange { get; set; }
+        public decimal ExpenseChange { get; set; }
+    }
+
+    private class DashboardQuickStats
+    {
+        public int TotalMiles { get; set; }
+        public decimal CostPerMile { get; set; }
+        public int ActiveTrucks { get; set; }
+        public int OverdueInvoices { get; set; }
+    }
+
+    private class RevenueExpenseData
+    {
+        public string Month { get; set; } = "";
+        public decimal Revenue { get; set; }
+        public decimal Expenses { get; set; }
+    }
+
+    private class CPMTrendPoint
+    {
+        public string Month { get; set; } = "";
+        public decimal CPM { get; set; }
+    }
+
+    private class ActivityItem
+    {
+        public string Type { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public DateTime Date { get; set; }
+        public decimal? Amount { get; set; }
+        public string Link { get; set; } = "";
+    }
+
+    private class AlertItem
+    {
+        public Severity Severity { get; set; }
+        public string Title { get; set; } = "";
+        public string Message { get; set; } = "";
+        public string Link { get; set; } = "";
+    }
+}

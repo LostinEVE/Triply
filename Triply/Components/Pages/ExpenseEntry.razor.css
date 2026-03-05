@@ -1,0 +1,32 @@
+/* Receipt image preview */
+::deep .mud-image {
+    border: 1px solid rgba(0,0,0,0.12);
+}
+
+/* Form section spacing */
+::deep .mud-form .mud-grid-item {
+    margin-bottom: 8px;
+}
+
+/* File upload button */
+::deep .mud-file-upload {
+    width: 100%;
+}
+
+/* Receipt preview card */
+.receipt-preview {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* Category select with chips */
+::deep .mud-select-item .mud-chip {
+    pointer-events: none;
+}
+
+/* Mobile camera button */
+@media (max-width: 600px) {
+    ::deep .mud-button-group .mud-button {
+        flex: 1;
+    }
+}

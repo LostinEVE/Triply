@@ -1,0 +1,244 @@
+﻿@using MudBlazor
+@using Triply.Components.Shared
+@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+
+<MudThemeProvider @bind-IsDarkMode="@_isDarkMode" Theme="_theme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="2" Dense="true">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" 
+                       Color="Color.Inherit" 
+                       Edge="Edge.Start" 
+                       OnClick="@((e) => DrawerToggle())" 
+                       Class="mr-2" />
+
+        <MudText Typo="Typo.h6" Class="mr-4">
+            <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Medium" Class="mr-2" />
+            Triply
+        </MudText>
+
+        <MudSpacer />
+
+        <MudTooltip Text="Quick Actions">
+            <MudMenu Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small" Class="mr-2">
+                <MudMenuItem Icon="@Icons.Material.Filled.Receipt" OnClick="@QuickAddExpenseAsync">
+                    Add Expense
+                </MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.LocalGasStation" OnClick="@(() => NavigateTo("/fuel/add"))">
+                    Add Fuel Entry
+                </MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.LocalShipping" OnClick="@(() => NavigateTo("/loads/add"))">
+                    Add Load
+                </MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Description" OnClick="@(() => NavigateTo("/invoices/create"))">
+                    Create Invoice
+                </MudMenuItem>
+            </MudMenu>
+        </MudTooltip>
+
+        <MudTooltip Text="@(_isDarkMode ? "Light Mode" : "Dark Mode")">
+            <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" 
+                          Color="Color.Inherit" 
+                          OnClick="@ToggleTheme" 
+                          Class="mr-2" />
+        </MudTooltip>
+
+        <MudTooltip Text="Notifications">
+            <NotificationBadge ShowCriticalOnly="true">
+                <MudIconButton Icon="@Icons.Material.Filled.Notifications" 
+                              Color="Color.Inherit" 
+                              OnClick="@(() => NavigateTo("/notifications"))" />
+            </NotificationBadge>
+        </MudTooltip>
+
+        <OfflineIndicator />
+
+        <MudTooltip Text="Settings">
+            <MudIconButton Icon="@Icons.Material.Filled.Settings" 
+                          Color="Color.Inherit" 
+                          OnClick="@(() => NavigateTo("/settings"))" 
+                          Class="ml-2" />
+        </MudTooltip>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" 
+               Elevation="2" 
+               ClipMode="DrawerClipMode.Always"
+               Breakpoint="Breakpoint.Md">
+        <MudDrawerHeader Class="pa-4">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.h5" Color="Color.Primary">Triply</MudText>
+            </MudStack>
+            <MudText Typo="Typo.body2" Class="mt-2">Trucking Management</MudText>
+        </MudDrawerHeader>
+
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4 pt-4">
+            <Breadcrumbs />
+
+            @Body
+        </MudContainer>
+    </MudMainContent>
+
+    @if (_isMobile)
+    {
+        <MudAppBar Bottom="true" Fixed="true" Elevation="3" Dense="true" Class="d-flex d-md-none">
+            <MudStack Row="true" Justify="Justify.SpaceAround" Style="width: 100%;">
+                <MudIconButton Icon="@Icons.Material.Filled.Home" 
+                              Color="@(IsActive("/") ? Color.Primary : Color.Default)"
+                              OnClick="@(() => NavigateTo("/"))" />
+                <MudIconButton Icon="@Icons.Material.Filled.LocalShipping" 
+                              Color="@(IsActive("/loads") ? Color.Primary : Color.Default)"
+                              OnClick="@(() => NavigateTo("/loads"))" />
+                <MudFab Color="Color.Primary" 
+                       StartIcon="@Icons.Material.Filled.Add" 
+                       Size="Size.Medium"
+                       OnClick="@(() => _showQuickActions = !_showQuickActions)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Receipt" 
+                              Color="@(IsActive("/expenses") ? Color.Primary : Color.Default)"
+                              OnClick="@(() => NavigateTo("/expenses"))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Menu" 
+                              Color="Color.Default"
+                              OnClick="@(() => DrawerToggle())" />
+            </MudStack>
+        </MudAppBar>
+    }
+
+    @if (_showQuickActions)
+    {
+        <MudOverlay Visible="true" OnClick="@(() => _showQuickActions = false)" />
+        <MudPaper Elevation="8" 
+                 Class="quick-actions-menu pa-3"
+                 Style="position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 1400; border-radius: 16px;">
+            <MudStack Spacing="2">
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Primary" 
+                          StartIcon="@Icons.Material.Filled.Receipt"
+                          FullWidth="true"
+                          OnClick="@QuickAddExpenseAsync">
+                    Add Expense
+                </MudButton>
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Primary" 
+                          StartIcon="@Icons.Material.Filled.LocalGasStation"
+                          FullWidth="true"
+                          OnClick="@(() => { NavigateTo("/fuel/add"); _showQuickActions = false; })">
+                    Add Fuel
+                </MudButton>
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Primary" 
+                          StartIcon="@Icons.Material.Filled.Description"
+                          FullWidth="true"
+                          OnClick="@(() => { NavigateTo("/invoices/create"); _showQuickActions = false; })">
+                    Create Invoice
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+    private bool _isDarkMode = false;
+    private bool _isMobile = false;
+    private bool _showQuickActions = false;
+
+    private MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight()
+        {
+            Primary = "#1976d2",
+            Secondary = "#424242",
+            AppbarBackground = "#1976d2",
+            Background = "#f5f5f5",
+            DrawerBackground = "#ffffff",
+            DrawerText = "rgba(0,0,0,0.87)",
+            Success = "#4caf50",
+            Error = "#f44336",
+            Warning = "#ff9800",
+            Info = "#2196f3"
+        },
+        PaletteDark = new PaletteDark()
+        {
+            Primary = "#90caf9",
+            Secondary = "#424242",
+            AppbarBackground = "#1e1e1e",
+            Background = "#121212",
+            DrawerBackground = "#1e1e1e",
+            DrawerText = "rgba(255,255,255,0.87)",
+            Success = "#66bb6a",
+            Error = "#ef5350",
+            Warning = "#ffa726",
+            Info = "#42a5f5"
+        }
+    };
+
+    protected override void OnInitialized()
+    {
+        // Load theme preference from local storage
+        _isDarkMode = false; // TODO: Load from preferences
+
+        // Close drawer on mobile by default
+        if (_isMobile)
+        {
+            _drawerOpen = false;
+        }
+    }
+
+    private void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private void ToggleTheme()
+    {
+        _isDarkMode = !_isDarkMode;
+        // TODO: Save to preferences
+    }
+
+    private void NavigateTo(string url)
+    {
+        _showQuickActions = false;
+        NavigationManager.NavigateTo(url);
+
+        if (_isMobile)
+        {
+            _drawerOpen = false;
+        }
+    }
+
+    private bool IsActive(string route)
+    {
+        var currentPath = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        return currentPath.StartsWith(route.TrimStart('/'), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task QuickAddExpenseAsync()
+    {
+        _showQuickActions = false;
+
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Small, 
+            FullWidth = true,
+            CloseButton = true
+        };
+
+        var dialog = await DialogService.ShowAsync<QuickAddExpense>("Quick Add Expense", options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            // Expense was added successfully
+            StateHasChanged();
+        }
+    }
+}

@@ -1,0 +1,182 @@
+@using MudBlazor
+@using Triply.Core.Interfaces
+@using Triply.Core.Models
+@implements IDisposable
+@inject INotificationService NotificationService
+@inject NavigationManager NavigationManager
+
+<MudCard Elevation="3">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Notifications" />
+                    <MudText Typo="Typo.h6">Alerts & Notifications</MudText>
+                    @if (_summary != null && _summary.TotalCount > 0)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="@(_summary.CriticalCount > 0 ? Color.Error : Color.Warning)">
+                            @_summary.TotalCount
+                        </MudChip>
+                    }
+                </MudStack>
+                @if (_notifications.Any())
+                {
+                    <MudButton Size="Size.Small" 
+                              Variant="Variant.Text" 
+                              OnClick="MarkAllAsReadAsync">
+                        Mark All Read
+                    </MudButton>
+                }
+            </MudStack>
+        </CardHeaderContent>
+    </MudCardHeader>
+    <MudCardContent>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (!_notifications.Any())
+        {
+            <MudAlert Severity="Severity.Success" Dense="true">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" />
+                    <MudText>No alerts at this time. Everything looks good!</MudText>
+                </MudStack>
+            </MudAlert>
+        }
+        else
+        {
+            <MudList Dense="true" T="string">
+                @foreach (var notification in _notifications.Take(MaxItems))
+                {
+                    <MudListItem OnClick="@(() => HandleNotificationClickAsync(notification))"
+                                Style="@(notification.IsRead ? "opacity: 0.6;" : "")">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudIcon Icon="@GetNotificationIcon(notification.Type)" 
+                                    Color="@GetNotificationColor(notification.Severity)" />
+                            <div style="flex-grow: 1;">
+                                <MudText Typo="Typo.subtitle2">@notification.Title</MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    @notification.Message
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @GetRelativeTime(notification.CreatedAt)
+                                </MudText>
+                            </div>
+                            @if (!notification.IsRead)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary">New</MudChip>
+                            }
+                        </MudStack>
+                    </MudListItem>
+                    <MudDivider />
+                }
+            </MudList>
+            
+            @if (_notifications.Count > MaxItems)
+            {
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Primary" 
+                          FullWidth="true"
+                          OnClick="@(() => NavigationManager.NavigateTo("/notifications"))">
+                    View All (@_notifications.Count) Notifications
+                </MudButton>
+            }
+        }
+    </MudCardContent>
+</MudCard>
+
+@code {
+    [Parameter]
+    public int MaxItems { get; set; } = 5;
+
+    private bool _loading = true;
+    private List<NotificationItem> _notifications = new();
+    private NotificationSummary? _summary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadNotificationsAsync();
+        NotificationService.NotificationsUpdated += OnNotificationsUpdated;
+    }
+
+    private async Task LoadNotificationsAsync()
+    {
+        _loading = true;
+        try
+        {
+            _notifications = await NotificationService.GetUnreadNotificationsAsync();
+            _summary = await NotificationService.GetNotificationSummaryAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnNotificationsUpdated(object? sender, NotificationSummary summary)
+    {
+        InvokeAsync(async () =>
+        {
+            await LoadNotificationsAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task HandleNotificationClickAsync(NotificationItem notification)
+    {
+        await NotificationService.MarkAsReadAsync(notification.Id);
+        
+        if (!string.IsNullOrEmpty(notification.ActionUrl))
+        {
+            NavigationManager.NavigateTo(notification.ActionUrl);
+        }
+    }
+
+    private async Task MarkAllAsReadAsync()
+    {
+        await NotificationService.MarkAllAsReadAsync();
+        await LoadNotificationsAsync();
+    }
+
+    private string GetNotificationIcon(NotificationType type)
+    {
+        return type switch
+        {
+            NotificationType.InvoiceOverdue or NotificationType.InvoiceDueSoon => Icons.Material.Filled.Receipt,
+            NotificationType.MaintenanceDue or NotificationType.MaintenanceOverdue => Icons.Material.Filled.Build,
+            NotificationType.DocumentExpiring or NotificationType.DocumentExpired => Icons.Material.Filled.Description,
+            NotificationType.TaxPaymentDue => Icons.Material.Filled.AccountBalance,
+            NotificationType.IFTAFilingDue => Icons.Material.Filled.Assignment,
+            _ => Icons.Material.Filled.Info
+        };
+    }
+
+    private Color GetNotificationColor(NotificationSeverity severity)
+    {
+        return severity switch
+        {
+            NotificationSeverity.Error => Color.Error,
+            NotificationSeverity.Warning => Color.Warning,
+            NotificationSeverity.Success => Color.Success,
+            _ => Color.Info
+        };
+    }
+
+    private string GetRelativeTime(DateTime dateTime)
+    {
+        var span = DateTime.Now - dateTime;
+        
+        if (span.TotalMinutes < 1) return "Just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        if (span.TotalDays < 7) return $"{(int)span.TotalDays}d ago";
+        
+        return dateTime.ToString("MMM dd");
+    }
+
+    public void Dispose()
+    {
+        NotificationService.NotificationsUpdated -= OnNotificationsUpdated;
+    }
+}

@@ -1,0 +1,99 @@
+@using MudBlazor
+@inject NavigationManager NavigationManager
+
+<MudNavMenu>
+    <MudNavLink Href="/" Icon="@Icons.Material.Filled.Dashboard" IconColor="Color.Primary">
+        Dashboard
+    </MudNavLink>
+    
+    <MudDivider Class="my-2" />
+    
+    <MudText Typo="Typo.caption" Class="px-4 py-2 mud-text-secondary">OPERATIONS</MudText>
+
+    <MudNavLink Href="/trucks" Icon="@Icons.Material.Filled.LocalShipping" IconColor="Color.Primary">
+        Trucks
+    </MudNavLink>
+
+    <MudNavLink Href="/loads" Icon="@Icons.Material.Filled.Inventory" IconColor="Color.Info">
+        Loads
+    </MudNavLink>
+    
+    <MudNavLink Href="/customers" Icon="@Icons.Material.Filled.Business" IconColor="Color.Secondary">
+        Customers
+    </MudNavLink>
+    
+    <MudDivider Class="my-2" />
+    
+    <MudText Typo="Typo.caption" Class="px-4 py-2 mud-text-secondary">FINANCIAL</MudText>
+    
+    <MudNavLink Href="/invoices" Icon="@Icons.Material.Filled.Description" IconColor="Color.Success">
+        Invoices
+    </MudNavLink>
+    
+    <MudNavLink Href="/expenses" Icon="@Icons.Material.Filled.Receipt" IconColor="Color.Error">
+        Expenses
+    </MudNavLink>
+    
+    <MudNavLink Href="/fuel" Icon="@Icons.Material.Filled.LocalGasStation" IconColor="Color.Warning">
+        Fuel Log
+    </MudNavLink>
+    
+    <MudNavLink Href="/maintenance" Icon="@Icons.Material.Filled.Build" IconColor="Color.Info">
+        Maintenance
+    </MudNavLink>
+    
+    <MudDivider Class="my-2" />
+    
+    <MudText Typo="Typo.caption" Class="px-4 py-2 mud-text-secondary">REPORTING & ACCOUNTING</MudText>
+    
+    <MudNavGroup Title="Reports" Icon="@Icons.Material.Filled.Assessment" IconColor="Color.Tertiary">
+        <MudNavLink Href="/reports/profit-loss" Icon="@Icons.Material.Filled.TrendingUp">
+            Profit & Loss
+        </MudNavLink>
+        <MudNavLink Href="/reports/balance-sheet" Icon="@Icons.Material.Filled.AccountBalance">
+            Balance Sheet
+        </MudNavLink>
+        <MudNavLink Href="/reports/tax" Icon="@Icons.Material.Filled.Money">
+            Tax Reports
+        </MudNavLink>
+        <MudNavLink Href="/reports/ifta" Icon="@Icons.Material.Filled.LocalGasStation">
+            IFTA Report
+        </MudNavLink>
+        <MudNavLink Href="/reports/cpm" Icon="@Icons.Material.Filled.Speed">
+            Cost Per Mile
+        </MudNavLink>
+        <MudNavLink Href="/reports/aging" Icon="@Icons.Material.Filled.Schedule">
+            AR Aging
+        </MudNavLink>
+    </MudNavGroup>
+    
+    <MudNavLink Href="/accounting" Icon="@Icons.Material.Filled.AccountBalanceWallet" IconColor="Color.Tertiary">
+        Accounting
+    </MudNavLink>
+    
+    <MudDivider Class="my-2" />
+
+    <MudText Typo="Typo.caption" Class="px-4 py-2 mud-text-secondary">SYSTEM</MudText>
+
+    <NotificationBadge ShowCriticalOnly="true">
+        <MudNavLink Href="/notifications" Icon="@Icons.Material.Filled.Notifications" IconColor="Color.Warning">
+            Notifications
+        </MudNavLink>
+    </NotificationBadge>
+
+    <MudNavLink Href="/sync-status" Icon="@Icons.Material.Filled.Sync" IconColor="Color.Info">
+        Sync Status
+    </MudNavLink>
+
+    <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Settings" IconColor="Color.Default">
+        Settings
+    </MudNavLink>
+
+    <MudNavLink Href="/help" Icon="@Icons.Material.Filled.Help" IconColor="Color.Info">
+        Help & Support
+    </MudNavLink>
+</MudNavMenu>
+
+@code {
+    private string? CurrentUrl => NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+}
