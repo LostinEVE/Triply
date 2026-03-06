@@ -387,19 +387,48 @@
     {
         try
         {
+            // Create a more permissive file type list
             var customFileType = new FilePickerFileType(
                 new Dictionary<DevicePlatform, IEnumerable<string>>
                 {
-                    { DevicePlatform.iOS, new[] { "public.json", "public.zip-archive", "public.gzip-archive", "public.tar-archive", "org.gnu.gnu-zip-archive" } },
-                    { DevicePlatform.Android, new[] { "application/json", "application/zip", "application/gzip", "application/x-gzip", "application/x-tar", "application/x-compressed-tar", "application/x-compressed" } },
-                    { DevicePlatform.WinUI, new[] { ".json", ".zip", ".tar.gz", ".tgz", ".gz" } },
-                    { DevicePlatform.macOS, new[] { "public.json", "public.zip-archive", "public.gzip-archive", "public.tar-archive" } }
+                    // iOS - Use UTIs
+                    { DevicePlatform.iOS, new[] { 
+                        "public.item",  // All files
+                        "public.data",  // Generic data
+                        "public.content",  // Generic content
+                        "public.archive",  // Archives
+                        "public.json", 
+                        "public.zip-archive", 
+                        "public.gzip-archive", 
+                        "public.tar-archive", 
+                        "org.gnu.gnu-zip-archive" 
+                    } },
+                    // Android - Use MIME types and wildcards
+                    { DevicePlatform.Android, new[] { 
+                        "*/*",  // All files as fallback
+                        "application/json", 
+                        "application/zip", 
+                        "application/gzip", 
+                        "application/x-gzip", 
+                        "application/x-tar", 
+                        "application/x-compressed-tar",
+                        "application/x-compressed",
+                        "application/octet-stream"  // Generic binary
+                    } },
+                    { DevicePlatform.WinUI, new[] { ".json", ".zip", ".tar.gz", ".tgz", ".gz", ".tar" } },
+                    { DevicePlatform.macOS, new[] { 
+                        "public.item",
+                        "public.json", 
+                        "public.zip-archive", 
+                        "public.gzip-archive", 
+                        "public.tar-archive" 
+                    } }
                 });
 
             var options = new PickOptions
             {
                 FileTypes = customFileType,
-                PickerTitle = "Select backup file"
+                PickerTitle = "Select backup file (JSON, ZIP, or TAR.GZ)"
             };
 
             _mobileSelectedFile = await FilePicker.PickAsync(options);
@@ -407,7 +436,12 @@
             if (_mobileSelectedFile != null)
             {
                 _importResult = null;
+                Snackbar.Add($"Selected: {_mobileSelectedFile.FileName}", Severity.Info);
                 StateHasChanged();
+            }
+            else
+            {
+                Snackbar.Add("No file selected", Severity.Warning);
             }
         }
         catch (Exception ex)
@@ -451,10 +485,14 @@
 
             using (fileStream)
             {
+                // Log file info for debugging
+                Snackbar.Add($"Processing file: {fileName}", Severity.Info);
+
                 // Determine file type and import accordingly
                 ImportResult result;
                 if (fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                 {
+                    Snackbar.Add("Detected JSON file", Severity.Info);
                     result = await DataImportExportService.ImportFromJsonAsync(fileStream);
                 }
                 else if (fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
@@ -462,6 +500,7 @@
                          fileName.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase) ||
                          fileName.EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
                 {
+                    Snackbar.Add($"Detected archive file: {Path.GetExtension(fileName)}", Severity.Info);
                     result = await DataImportExportService.ImportFromArchiveAsync(fileStream, fileName);
                 }
                 else
@@ -469,7 +508,7 @@
                     result = new ImportResult 
                     { 
                         Success = false, 
-                        Message = "Unsupported file format. Please use .json, .zip, .tar.gz, or .tgz files." 
+                        Message = $"Unsupported file format: '{fileName}'. Please use .json, .zip, .tar.gz, or .tgz files." 
                     };
                 }
 
