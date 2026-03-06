@@ -121,32 +121,54 @@
                         Merge imported data with existing records. Duplicate records will be skipped.
                     </MudAlert>
                     
-                    <MudFileUpload T="IBrowserFile" 
-                                  OnFilesChanged="HandleImportFile"
-                                  Accept=".json,.zip,.tar.gz,.tgz">
-                        <ActivatorContent>
-                            <MudButton Variant="Variant.Outlined"
-                                      Color="Color.Info"
-                                      FullWidth="true"
-                                      StartIcon="@Icons.Material.Filled.AttachFile">
-                                Select Backup File
-                            </MudButton>
-                        </ActivatorContent>
-                    </MudFileUpload>
-                    
-                    @if (_selectedFile != null)
+                    @if (DeviceInfo.Platform == DevicePlatform.WinUI)
                     {
-                        <MudChip T="string" Icon="@Icons.Material.Filled.InsertDriveFile" Color="Color.Info">
-                            @_selectedFile.Name (@(_selectedFile.Size / 1024)KB)
-                        </MudChip>
+                        <MudFileUpload T="IBrowserFile" 
+                                      OnFilesChanged="HandleImportFile"
+                                      Accept=".json,.zip,.tar.gz,.tgz,application/json,application/zip,application/gzip,application/x-tar,application/x-gzip">
+                            <ActivatorContent>
+                                <MudButton Variant="Variant.Outlined"
+                                          Color="Color.Info"
+                                          FullWidth="true"
+                                          StartIcon="@Icons.Material.Filled.AttachFile">
+                                    Select Backup File
+                                </MudButton>
+                            </ActivatorContent>
+                        </MudFileUpload>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Outlined"
+                                  Color="Color.Info"
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.AttachFile"
+                                  OnClick="SelectFileAsync">
+                            Select Backup File
+                        </MudButton>
                     }
                     
+                    @if (_selectedFile != null || _mobileSelectedFile != null)
+                    {
+                        @if (_selectedFile != null)
+                        {
+                            <MudChip T="string" Icon="@Icons.Material.Filled.InsertDriveFile" Color="Color.Info">
+                                @_selectedFile.Name (@(_selectedFile.Size / 1024)KB)
+                            </MudChip>
+                        }
+                        else if (_mobileSelectedFile != null)
+                        {
+                            <MudChip T="string" Icon="@Icons.Material.Filled.InsertDriveFile" Color="Color.Info">
+                                @_mobileSelectedFile.FileName
+                            </MudChip>
+                        }
+                    }
+
                     <MudButton Variant="Variant.Filled" 
                               Color="Color.Info" 
                               FullWidth="true"
                               StartIcon="@Icons.Material.Filled.FileUpload"
                               OnClick="ImportDataAsync"
-                              Disabled="@(_importing || _selectedFile == null)">
+                              Disabled="@(_importing || (_selectedFile == null && _mobileSelectedFile == null))">
                         @if (_importing)
                         {
                             <MudProgressCircular Size="Size.Small" Indeterminate="true" />
@@ -358,59 +380,118 @@
         _importResult = null;
     }
 
+    // For mobile platforms - use native file picker
+    private FileResult? _mobileSelectedFile;
+
+    private async Task SelectFileAsync()
+    {
+        try
+        {
+            var customFileType = new FilePickerFileType(
+                new Dictionary<DevicePlatform, IEnumerable<string>>
+                {
+                    { DevicePlatform.iOS, new[] { "public.json", "public.zip-archive", "public.gzip-archive", "public.tar-archive", "org.gnu.gnu-zip-archive" } },
+                    { DevicePlatform.Android, new[] { "application/json", "application/zip", "application/gzip", "application/x-gzip", "application/x-tar", "application/x-compressed-tar", "application/x-compressed" } },
+                    { DevicePlatform.WinUI, new[] { ".json", ".zip", ".tar.gz", ".tgz", ".gz" } },
+                    { DevicePlatform.macOS, new[] { "public.json", "public.zip-archive", "public.gzip-archive", "public.tar-archive" } }
+                });
+
+            var options = new PickOptions
+            {
+                FileTypes = customFileType,
+                PickerTitle = "Select backup file"
+            };
+
+            _mobileSelectedFile = await FilePicker.PickAsync(options);
+
+            if (_mobileSelectedFile != null)
+            {
+                _importResult = null;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error selecting file: {ex.Message}", Severity.Error);
+        }
+    }
+
     private async Task ImportDataAsync()
     {
-        if (_selectedFile == null) return;
+        if (_selectedFile == null && _mobileSelectedFile == null) return;
 
         try
         {
             _importing = true;
             _importResult = null;
 
-            // Read the file into a memory stream
-            using var memoryStream = new MemoryStream();
-            await _selectedFile.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024).CopyToAsync(memoryStream);
-            memoryStream.Position = 0;
+            Stream fileStream;
+            string fileName;
 
-            // Determine file type and import accordingly
-            ImportResult result;
-            if (_selectedFile.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            // Handle both browser file and mobile file picker
+            if (_selectedFile != null)
             {
-                result = await DataImportExportService.ImportFromJsonAsync(memoryStream);
+                // Browser/Desktop file upload
+                var memoryStream = new MemoryStream();
+                await _selectedFile.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024).CopyToAsync(memoryStream);
+                memoryStream.Position = 0;
+                fileStream = memoryStream;
+                fileName = _selectedFile.Name;
             }
-            else if (_selectedFile.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
-                     _selectedFile.Name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) ||
-                     _selectedFile.Name.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase))
+            else if (_mobileSelectedFile != null)
             {
-                result = await DataImportExportService.ImportFromArchiveAsync(memoryStream, _selectedFile.Name);
+                // Mobile file picker
+                fileStream = await _mobileSelectedFile.OpenReadAsync();
+                fileName = _mobileSelectedFile.FileName;
             }
             else
             {
-                result = new ImportResult 
-                { 
-                    Success = false, 
-                    Message = "Unsupported file format. Please use .json, .zip, .tar.gz, or .tgz files." 
-                };
+                return;
             }
 
-            _importSuccess = result.Success;
-            if (result.Success)
+            using (fileStream)
             {
-                _importResult = $"Successfully imported {result.TotalRecordsImported} records:\n" +
-                               $"• {result.TrucksImported} trucks\n" +
-                               $"• {result.DriversImported} drivers\n" +
-                               $"• {result.CustomersImported} customers\n" +
-                               $"• {result.LoadsImported} loads\n" +
-                               $"• {result.ExpensesImported} expenses\n" +
-                               $"• {result.FuelEntriesImported} fuel entries\n" +
-                               $"• {result.MaintenanceRecordsImported} maintenance records\n" +
-                               $"• {result.InvoicesImported} invoices";
-                Snackbar.Add("Data imported successfully", Severity.Success);
-            }
-            else
-            {
-                _importResult = result.Message;
-                Snackbar.Add("Import failed", Severity.Error);
+                // Determine file type and import accordingly
+                ImportResult result;
+                if (fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    result = await DataImportExportService.ImportFromJsonAsync(fileStream);
+                }
+                else if (fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
+                         fileName.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) ||
+                         fileName.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase) ||
+                         fileName.EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
+                {
+                    result = await DataImportExportService.ImportFromArchiveAsync(fileStream, fileName);
+                }
+                else
+                {
+                    result = new ImportResult 
+                    { 
+                        Success = false, 
+                        Message = "Unsupported file format. Please use .json, .zip, .tar.gz, or .tgz files." 
+                    };
+                }
+
+                _importSuccess = result.Success;
+                if (result.Success)
+                {
+                    _importResult = $"Successfully imported {result.TotalRecordsImported} records:\n" +
+                                   $"• {result.TrucksImported} trucks\n" +
+                                   $"• {result.DriversImported} drivers\n" +
+                                   $"• {result.CustomersImported} customers\n" +
+                                   $"• {result.LoadsImported} loads\n" +
+                                   $"• {result.ExpensesImported} expenses\n" +
+                                   $"• {result.FuelEntriesImported} fuel entries\n" +
+                                   $"• {result.MaintenanceRecordsImported} maintenance records\n" +
+                                   $"• {result.InvoicesImported} invoices";
+                    Snackbar.Add("Data imported successfully", Severity.Success);
+                }
+                else
+                {
+                    _importResult = result.Message;
+                    Snackbar.Add("Import failed", Severity.Error);
+                }
             }
         }
         catch (Exception ex)

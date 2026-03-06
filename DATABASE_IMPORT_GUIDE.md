@@ -76,6 +76,13 @@ The JSON file should have this structure:
 - Only `.tar.gz`, `.tgz`, `.zip` and `.json` files are supported
 - Make sure your file has the correct extension
 
+**Can't select the file on mobile (Android/iOS)**
+- The app now uses the native file picker on mobile devices
+- Make sure your file is saved in a location accessible to apps (Downloads, Documents, etc.)
+- On Android, you may need to grant storage permissions
+- On iOS, make sure the file is in iCloud Drive or the Files app
+- Try using the "Browse" option in the file picker to navigate to your file
+
 **Import fails partway through**
 - The import uses transactions, so partial imports won't corrupt your database
 - Check the error message for specific details
