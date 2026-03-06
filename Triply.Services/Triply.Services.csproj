@@ -7,10 +7,10 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="12.1.1" />
-    <PackageReference Include="MailKit" Version="4.15.0" />
+    <PackageReference Include="MailKit" Version="4.15.1" />
     <PackageReference Include="Microsoft.Maui.Essentials" Version="10.0.41" />
     <PackageReference Include="MudBlazor" Version="9.1.0" />
-    <PackageReference Include="QuestPDF" Version="2026.2.2" />
+    <PackageReference Include="QuestPDF" Version="2026.2.3" />
   </ItemGroup>
 
   <PropertyGroup>

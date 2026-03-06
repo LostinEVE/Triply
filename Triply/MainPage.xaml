@@ -3,12 +3,25 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:local="clr-namespace:Triply"
              xmlns:components="clr-namespace:Triply.Components"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              x:Class="Triply.MainPage">
 
-    <BlazorWebView x:Name="blazorWebView" HostPage="wwwroot/index.html">
-        <BlazorWebView.RootComponents>
-            <RootComponent Selector="#app" ComponentType="{x:Type components:Routes}" />
-        </BlazorWebView.RootComponents>
-    </BlazorWebView>
+    <Grid RowDefinitions="Auto,*,Auto"
+          Padding="{OnPlatform Android='0,35,0,0'}">
+
+        <!-- BlazorWebView in middle row -->
+        <BlazorWebView x:Name="blazorWebView" 
+                      HostPage="wwwroot/index.html"
+                      Grid.Row="1">
+            <BlazorWebView.RootComponents>
+                <RootComponent Selector="#app" ComponentType="{x:Type components:Routes}" />
+            </BlazorWebView.RootComponents>
+        </BlazorWebView>
+
+        <!-- Bottom padding for navigation bar -->
+        <BoxView Grid.Row="2" 
+                HeightRequest="{OnPlatform Android=48, iOS=34}"
+                Color="Transparent" />
+    </Grid>
 
 </ContentPage>
