@@ -125,7 +125,7 @@
                     {
                         <MudFileUpload T="IBrowserFile" 
                                       OnFilesChanged="HandleImportFile"
-                                      Accept=".json,.zip,.tar.gz,.tgz,application/json,application/zip,application/gzip,application/x-tar,application/x-gzip">
+                                      Accept=".json,.zip,.tar.gz,.tgz,.dat,.txt,application/json,application/zip,application/gzip,application/x-tar,application/x-gzip,application/octet-stream">
                             <ActivatorContent>
                                 <MudButton Variant="Variant.Outlined"
                                           Color="Color.Info"
@@ -490,9 +490,11 @@
 
                 // Determine file type and import accordingly
                 ImportResult result;
-                if (fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                if (fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
+                    fileName.EndsWith(".dat", StringComparison.OrdinalIgnoreCase) ||
+                    fileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
                 {
-                    Snackbar.Add("Detected JSON file", Severity.Info);
+                    Snackbar.Add($"Detected data file: {fileName}", Severity.Info);
                     result = await DataImportExportService.ImportFromJsonAsync(fileStream);
                 }
                 else if (fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
@@ -508,7 +510,7 @@
                     result = new ImportResult 
                     { 
                         Success = false, 
-                        Message = $"Unsupported file format: '{fileName}'. Please use .json, .zip, .tar.gz, or .tgz files." 
+                        Message = $"Unsupported file format: '{fileName}'. Please use .json, .dat, .txt, .zip, .tar.gz, or .tgz files." 
                     };
                 }
 

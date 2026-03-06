@@ -69,21 +69,49 @@ public class DataImportExportService : IDataImportExportService
         {
             using var archive = TarArchive.Open(tarGzStream);
 
-            // Look for a data.json file in the tar.gz
+            _logger.LogInformation($"Found {archive.Entries.Count(e => !e.IsDirectory)} files in tar.gz archive");
+
+            // First, try to find files with known extensions
             foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
             {
-                if (entry.Key.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                _logger.LogInformation($"Checking file: {entry.Key}");
+
+                // Check for JSON, DAT, or TXT files (PostgreSQL dumps often use .dat)
+                if (entry.Key.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
+                    entry.Key.EndsWith(".dat", StringComparison.OrdinalIgnoreCase) ||
+                    entry.Key.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
                 {
+                    _logger.LogInformation($"Attempting to import from: {entry.Key}");
+
                     using var entryStream = entry.OpenEntryStream();
                     using var memoryStream = new MemoryStream();
                     await entryStream.CopyToAsync(memoryStream);
                     memoryStream.Position = 0;
-                    return await ImportFromJsonAsync(memoryStream);
+
+                    // Try to detect if it's JSON by peeking at the first character
+                    using var reader = new StreamReader(memoryStream, leaveOpen: true);
+                    var firstChar = (char)reader.Peek();
+                    memoryStream.Position = 0;
+
+                    if (firstChar == '{' || firstChar == '[')
+                    {
+                        // Looks like JSON, try to import it
+                        _logger.LogInformation($"File {entry.Key} appears to be JSON");
+                        return await ImportFromJsonAsync(memoryStream);
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"File {entry.Key} doesn't appear to be JSON (first char: '{firstChar}')");
+                    }
                 }
             }
 
+            // If no suitable file found, list all files in the archive
+            var fileList = string.Join(", ", archive.Entries.Where(e => !e.IsDirectory).Select(e => e.Key));
+            _logger.LogError($"No importable file found. Files in archive: {fileList}");
+
             result.Success = false;
-            result.Message = "No JSON data file found in the tar.gz archive.";
+            result.Message = $"No JSON data file found in the tar.gz archive.\n\nFiles found: {fileList}\n\nSupported formats: .json, .dat, .txt (must contain JSON data)";
             return result;
         }
         catch (Exception ex)
@@ -103,21 +131,48 @@ public class DataImportExportService : IDataImportExportService
         {
             using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read, leaveOpen: true);
 
-            // Look for a data.json file in the zip
-            var dataEntry = archive.Entries.FirstOrDefault(e => 
-                e.Name.Equals("data.json", StringComparison.OrdinalIgnoreCase) ||
-                e.Name.Equals("backup.json", StringComparison.OrdinalIgnoreCase) ||
-                e.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
+            _logger.LogInformation($"Found {archive.Entries.Count} files in zip archive");
 
-            if (dataEntry == null)
+            // Look for JSON, DAT, or TXT files
+            foreach (var entry in archive.Entries.Where(e => !string.IsNullOrEmpty(e.Name)))
             {
-                result.Success = false;
-                result.Message = "No JSON data file found in the zip archive.";
-                return result;
+                _logger.LogInformation($"Checking file: {entry.FullName}");
+
+                if (entry.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
+                    entry.Name.EndsWith(".dat", StringComparison.OrdinalIgnoreCase) ||
+                    entry.Name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation($"Attempting to import from: {entry.Name}");
+
+                    using var entryStream = entry.Open();
+                    using var memoryStream = new MemoryStream();
+                    await entryStream.CopyToAsync(memoryStream);
+                    memoryStream.Position = 0;
+
+                    // Try to detect if it's JSON
+                    using var reader = new StreamReader(memoryStream, leaveOpen: true);
+                    var firstChar = (char)reader.Peek();
+                    memoryStream.Position = 0;
+
+                    if (firstChar == '{' || firstChar == '[')
+                    {
+                        _logger.LogInformation($"File {entry.Name} appears to be JSON");
+                        return await ImportFromJsonAsync(memoryStream);
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"File {entry.Name} doesn't appear to be JSON (first char: '{firstChar}')");
+                    }
+                }
             }
 
-            using var jsonStream = dataEntry.Open();
-            return await ImportFromJsonAsync(jsonStream);
+            // If no suitable file found, list all files
+            var fileList = string.Join(", ", archive.Entries.Where(e => !string.IsNullOrEmpty(e.Name)).Select(e => e.Name));
+            _logger.LogError($"No importable file found. Files in archive: {fileList}");
+
+            result.Success = false;
+            result.Message = $"No JSON data file found in the zip archive.\n\nFiles found: {fileList}\n\nSupported formats: .json, .dat, .txt (must contain JSON data)";
+            return result;
         }
         catch (Exception ex)
         {

@@ -4,6 +4,16 @@
 
 If you're importing data from a PostgreSQL backup into Triply's SQLite database, you may encounter compatibility issues. Here's how to address them:
 
+### 0. **PostgreSQL Export Format**
+
+PostgreSQL exports can come in various formats:
+- **`.json`** - JSON format (most compatible)
+- **`.dat`** - PostgreSQL data dump file (often contains JSON)
+- **`.tar.gz`** or `.tgz` - Compressed archive containing data files
+- **`.sql`** - SQL dump (not directly supported - convert to JSON first)
+
+**The app now supports `.dat` files!** If your tar.gz contains a `.dat` file, the app will automatically detect if it contains JSON data and import it.
+
 ### 1. **Data Type Differences**
 
 #### Boolean Values
