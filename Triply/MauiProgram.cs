@@ -91,6 +91,7 @@ namespace Triply
             // Register enhanced services with validation and error handling
             Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<TruckService>(builder.Services);
             Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<InvoiceServiceEnhanced>(builder.Services);
+            Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<IDataImportExportService, DataImportExportService>(builder.Services);
 
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();

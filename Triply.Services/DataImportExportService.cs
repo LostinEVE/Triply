@@ -1,0 +1,413 @@
+using System.IO.Compression;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Triply.Core.Interfaces;
+using Triply.Core.Models;
+using SharpCompress.Archives;
+using SharpCompress.Archives.Tar;
+using SharpCompress.Readers;
+
+namespace Triply.Services;
+
+public interface IDataImportExportService
+{
+    Task<ImportResult> ImportFromArchiveAsync(Stream archiveStream, string fileName);
+    Task<ImportResult> ImportFromJsonAsync(Stream jsonStream);
+    Task<ExportResult> ExportToZipAsync();
+    Task<ExportResult> ExportToJsonAsync();
+}
+
+public class DataImportExportService : IDataImportExportService
+{
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ILogger<DataImportExportService> _logger;
+
+    public DataImportExportService(IUnitOfWork unitOfWork, ILogger<DataImportExportService> logger)
+    {
+        _unitOfWork = unitOfWork;
+        _logger = logger;
+    }
+
+    public async Task<ImportResult> ImportFromArchiveAsync(Stream archiveStream, string fileName)
+    {
+        var result = new ImportResult();
+
+        try
+        {
+            // Determine archive type from file extension
+            if (fileName.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) ||
+                fileName.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase))
+            {
+                return await ImportFromTarGzAsync(archiveStream);
+            }
+            else if (fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                return await ImportFromZipAsync(archiveStream);
+            }
+            else
+            {
+                result.Success = false;
+                result.Message = "Unsupported archive format. Please use .zip, .tar.gz, or .tgz files.";
+                return result;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error importing from archive file");
+            result.Success = false;
+            result.Message = $"Import failed: {ex.Message}";
+            return result;
+        }
+    }
+
+    private async Task<ImportResult> ImportFromTarGzAsync(Stream tarGzStream)
+    {
+        var result = new ImportResult();
+
+        try
+        {
+            using var archive = TarArchive.Open(tarGzStream);
+
+            // Look for a data.json file in the tar.gz
+            foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
+            {
+                if (entry.Key.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    using var entryStream = entry.OpenEntryStream();
+                    using var memoryStream = new MemoryStream();
+                    await entryStream.CopyToAsync(memoryStream);
+                    memoryStream.Position = 0;
+                    return await ImportFromJsonAsync(memoryStream);
+                }
+            }
+
+            result.Success = false;
+            result.Message = "No JSON data file found in the tar.gz archive.";
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error importing from tar.gz file");
+            result.Success = false;
+            result.Message = $"Import failed: {ex.Message}";
+            return result;
+        }
+    }
+
+    private async Task<ImportResult> ImportFromZipAsync(Stream zipStream)
+    {
+        var result = new ImportResult();
+
+        try
+        {
+            using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read, leaveOpen: true);
+
+            // Look for a data.json file in the zip
+            var dataEntry = archive.Entries.FirstOrDefault(e => 
+                e.Name.Equals("data.json", StringComparison.OrdinalIgnoreCase) ||
+                e.Name.Equals("backup.json", StringComparison.OrdinalIgnoreCase) ||
+                e.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
+
+            if (dataEntry == null)
+            {
+                result.Success = false;
+                result.Message = "No JSON data file found in the zip archive.";
+                return result;
+            }
+
+            using var jsonStream = dataEntry.Open();
+            return await ImportFromJsonAsync(jsonStream);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error importing from zip file");
+            result.Success = false;
+            result.Message = $"Import failed: {ex.Message}";
+            return result;
+        }
+    }
+
+    public async Task<ImportResult> ImportFromJsonAsync(Stream jsonStream)
+    {
+        var result = new ImportResult();
+        
+        try
+        {
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+
+            var backupData = await JsonSerializer.DeserializeAsync<BackupData>(jsonStream, options);
+            
+            if (backupData == null)
+            {
+                result.Success = false;
+                result.Message = "Failed to deserialize backup data.";
+                return result;
+            }
+
+            // Start a transaction
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            
+            try
+            {
+                // Import data in the correct order to respect foreign key constraints
+                await ImportCompanySettingsAsync(backupData.CompanySettings, result);
+                await ImportTrucksAsync(backupData.Trucks, result);
+                await ImportDriversAsync(backupData.Drivers, result);
+                await ImportCustomersAsync(backupData.Customers, result);
+                await ImportLoadsAsync(backupData.Loads, result);
+                await ImportExpensesAsync(backupData.Expenses, result);
+                await ImportFuelEntriesAsync(backupData.FuelEntries, result);
+                await ImportMaintenanceRecordsAsync(backupData.MaintenanceRecords, result);
+                await ImportInvoicesAsync(backupData.Invoices, result);
+                await ImportInvoiceLineItemsAsync(backupData.InvoiceLineItems, result);
+                await ImportTaxPaymentsAsync(backupData.TaxPayments, result);
+
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitTransactionAsync();
+
+                result.Success = true;
+                result.Message = $"Successfully imported {result.TotalRecordsImported} records.";
+            }
+            catch (Exception ex)
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error importing from JSON");
+            result.Success = false;
+            result.Message = $"Import failed: {ex.Message}";
+        }
+
+        return result;
+    }
+
+    private async Task ImportCompanySettingsAsync(List<CompanySettings>? items, ImportResult result)
+    {
+        if (items == null || !items.Any()) return;
+
+        foreach (var item in items)
+        {
+            var existing = await _unitOfWork.CompanySettings.GetByIdAsync(item.Id);
+            if (existing == null)
+            {
+                await _unitOfWork.CompanySettings.AddAsync(item);
+                result.CompanySettingsImported++;
+            }
+        }
+    }
+
+    private async Task ImportTrucksAsync(List<Truck>? items, ImportResult result)
+    {
+        if (items == null || !items.Any()) return;
+
+        foreach (var item in items)
+        {
+            var existing = await _unitOfWork.Trucks.GetByIdAsync(item.TruckId);
+            if (existing == null)
+            {
+                await _unitOfWork.Trucks.AddAsync(item);
+                result.TrucksImported++;
+            }
+        }
+    }
+
+    private async Task ImportDriversAsync(List<Driver>? items, ImportResult result)
+    {
+        if (items == null || !items.Any()) return;
+
+        foreach (var item in items)
+        {
+            var existing = await _unitOfWork.Drivers.GetByIdAsync(item.DriverId);
+            if (existing == null)
+            {
+                await _unitOfWork.Drivers.AddAsync(item);
+                result.DriversImported++;
+            }
+        }
+    }
+
+    private async Task ImportCustomersAsync(List<Customer>? items, ImportResult result)
+    {
+        if (items == null || !items.Any()) return;
+
+        foreach (var item in items)
+        {
+            var existing = await _unitOfWork.Customers.GetByIdAsync(item.CustomerId);
+            if (existing == null)
+            {
+                await _unitOfWork.Customers.AddAsync(item);
+                result.CustomersImported++;
+            }
+        }
+    }
+
+    private async Task ImportLoadsAsync(List<Load>? items, ImportResult result)
+    {
+        if (items == null || !items.Any()) return;
+
+        foreach (var item in items)
+        {
+            var existing = await _unitOfWork.Loads.GetByIdAsync(item.LoadId);
+            if (existing == null)
+            {
+                await _unitOfWork.Loads.AddAsync(item);
+                result.LoadsImported++;
+            }
+        }
+    }
+
+    private async Task ImportExpensesAsync(List<Expense>? items, ImportResult result)
+    {
+        if (items == null || !items.Any()) return;
+
+        foreach (var item in items)
+        {
+            var existing = await _unitOfWork.Expenses.GetByIdAsync(item.ExpenseId);
+            if (existing == null)
+            {
+                await _unitOfWork.Expenses.AddAsync(item);
+                result.ExpensesImported++;
+            }
+        }
+    }
+
+    private async Task ImportFuelEntriesAsync(List<FuelEntry>? items, ImportResult result)
+    {
+        if (items == null || !items.Any()) return;
+
+        foreach (var item in items)
+        {
+            var existing = await _unitOfWork.FuelEntries.GetByIdAsync(item.FuelEntryId);
+            if (existing == null)
+            {
+                await _unitOfWork.FuelEntries.AddAsync(item);
+                result.FuelEntriesImported++;
+            }
+        }
+    }
+
+    private async Task ImportMaintenanceRecordsAsync(List<MaintenanceRecord>? items, ImportResult result)
+    {
+        if (items == null || !items.Any()) return;
+
+        foreach (var item in items)
+        {
+            var existing = await _unitOfWork.MaintenanceRecords.GetByIdAsync(item.MaintenanceId);
+            if (existing == null)
+            {
+                await _unitOfWork.MaintenanceRecords.AddAsync(item);
+                result.MaintenanceRecordsImported++;
+            }
+        }
+    }
+
+    private async Task ImportInvoicesAsync(List<Invoice>? items, ImportResult result)
+    {
+        if (items == null || !items.Any()) return;
+
+        foreach (var item in items)
+        {
+            var existing = await _unitOfWork.Invoices.GetByIdAsync(item.InvoiceId);
+            if (existing == null)
+            {
+                await _unitOfWork.Invoices.AddAsync(item);
+                result.InvoicesImported++;
+            }
+        }
+    }
+
+    private async Task ImportInvoiceLineItemsAsync(List<InvoiceLineItem>? items, ImportResult result)
+    {
+        if (items == null || !items.Any()) return;
+
+        foreach (var item in items)
+        {
+            var existing = await _unitOfWork.InvoiceLineItems.GetByIdAsync(item.LineItemId);
+            if (existing == null)
+            {
+                await _unitOfWork.InvoiceLineItems.AddAsync(item);
+                result.InvoiceLineItemsImported++;
+            }
+        }
+    }
+
+    private async Task ImportTaxPaymentsAsync(List<TaxPayment>? items, ImportResult result)
+    {
+        if (items == null || !items.Any()) return;
+
+        foreach (var item in items)
+        {
+            var existing = await _unitOfWork.TaxPayments.GetByIdAsync(item.TaxPaymentId);
+            if (existing == null)
+            {
+                await _unitOfWork.TaxPayments.AddAsync(item);
+                result.TaxPaymentsImported++;
+            }
+        }
+    }
+
+    public async Task<ExportResult> ExportToZipAsync()
+    {
+        // TODO: Implement export to zip
+        throw new NotImplementedException();
+    }
+
+    public async Task<ExportResult> ExportToJsonAsync()
+    {
+        // TODO: Implement export to JSON
+        throw new NotImplementedException();
+    }
+}
+
+public class BackupData
+{
+    public List<CompanySettings>? CompanySettings { get; set; }
+    public List<Truck>? Trucks { get; set; }
+    public List<Driver>? Drivers { get; set; }
+    public List<Customer>? Customers { get; set; }
+    public List<Load>? Loads { get; set; }
+    public List<Expense>? Expenses { get; set; }
+    public List<FuelEntry>? FuelEntries { get; set; }
+    public List<MaintenanceRecord>? MaintenanceRecords { get; set; }
+    public List<Invoice>? Invoices { get; set; }
+    public List<InvoiceLineItem>? InvoiceLineItems { get; set; }
+    public List<TaxPayment>? TaxPayments { get; set; }
+}
+
+public class ImportResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public int TrucksImported { get; set; }
+    public int DriversImported { get; set; }
+    public int CustomersImported { get; set; }
+    public int LoadsImported { get; set; }
+    public int ExpensesImported { get; set; }
+    public int FuelEntriesImported { get; set; }
+    public int MaintenanceRecordsImported { get; set; }
+    public int InvoicesImported { get; set; }
+    public int InvoiceLineItemsImported { get; set; }
+    public int TaxPaymentsImported { get; set; }
+    public int CompanySettingsImported { get; set; }
+
+    public int TotalRecordsImported =>
+        TrucksImported + DriversImported + CustomersImported + LoadsImported +
+        ExpensesImported + FuelEntriesImported + MaintenanceRecordsImported +
+        InvoicesImported + InvoiceLineItemsImported + TaxPaymentsImported +
+        CompanySettingsImported;
+}
+
+public class ExportResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public byte[]? Data { get; set; }
+    public string FileName { get; set; } = string.Empty;
+}
