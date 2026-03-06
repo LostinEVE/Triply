@@ -1,0 +1,36 @@
+<svg width="456" height="456" viewBox="0 0 456 456" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="456" height="456" fill="#FF6B35"/>
+  
+  <!-- Centered Truck Icon -->
+  <g transform="translate(128, 148)">
+    <!-- Truck cabin -->
+    <rect x="0" y="50" width="60" height="60" fill="#FFFFFF" rx="8"/>
+    
+    <!-- Truck container -->
+    <rect x="60" y="30" width="120" height="80" fill="#FFFFFF" rx="8"/>
+    
+    <!-- Wheels -->
+    <circle cx="40" cy="120" r="20" fill="#004E89"/>
+    <circle cx="40" cy="120" r="12" fill="#FFFFFF"/>
+    
+    <circle cx="130" cy="120" r="20" fill="#004E89"/>
+    <circle cx="130" cy="120" r="12" fill="#FFFFFF"/>
+    
+    <circle cx="170" cy="120" r="20" fill="#004E89"/>
+    <circle cx="170" cy="120" r="12" fill="#FFFFFF"/>
+    
+    <!-- Route lines -->
+    <path d="M 10 140 L 210 140" stroke="#1A659E" stroke-width="6" stroke-dasharray="20,10" stroke-linecap="round"/>
+  </g>
+  
+  <!-- App name -->
+  <text x="228" y="340" font-family="Inter, Roboto, sans-serif" font-size="56" font-weight="700" fill="#FFFFFF" text-anchor="middle">
+    Triply
+  </text>
+  
+  <!-- Tagline -->
+  <text x="228" y="380" font-family="Inter, Roboto, sans-serif" font-size="20" font-weight="400" fill="#FFFFFF" fill-opacity="0.9" text-anchor="middle">
+    Trucking Management
+  </text>
+</svg>

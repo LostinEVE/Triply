@@ -5,22 +5,33 @@
 @using Triply.Core.Models
 @using Triply.Core.Enums
 @using Triply.Core.Interfaces
+@using Triply.Components.Shared
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @inject IUnitOfWork UnitOfWork
+@inject IDialogService DialogService
 
 <PageTitle>Expenses - Triply</PageTitle>
 
-<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
-    <MudIcon Icon="@Icons.Material.Filled.Receipt" Class="mr-2" />
-    Expenses
-    @if (_expenses != null && _filteredExpenses != null)
-    {
-        <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-2">
-            @_filteredExpenses.Count() of @_expenses.Count
-        </MudChip>
-    }
-</MudText>
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">
+        <MudIcon Icon="@Icons.Material.Filled.Receipt" Class="mr-2" />
+        Expenses
+        @if (_expenses != null && _filteredExpenses != null)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-2">
+                @_filteredExpenses.Count() of @_expenses.Count
+            </MudChip>
+        }
+    </MudText>
+
+    <MudButton Variant="Variant.Filled" 
+              Color="Color.Primary" 
+              StartIcon="@Icons.Material.Filled.Add"
+              OnClick="OpenQuickAddExpenseAsync">
+        Add Expense
+    </MudButton>
+</MudStack>
 
 <MudCard Elevation="3" Class="mb-3">
     <MudCardContent>
@@ -28,7 +39,7 @@
             <MudIcon Icon="@Icons.Material.Filled.FilterList" Class="mr-2" />
             Filters
         </MudText>
-        
+
         <MudGrid>
             <MudItem xs="12" sm="6" md="3">
                 <MudDatePicker Date="@_startDate" 
@@ -343,6 +354,25 @@
         _selectedPaymentMethod = null;
         _searchString = "";
         ApplyFilters();
+    }
+
+    private async Task OpenQuickAddExpenseAsync()
+    {
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Medium, 
+            FullWidth = true,
+            CloseButton = true
+        };
+
+        var dialog = await DialogService.ShowAsync<QuickAddExpense>("Add Expense", options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadExpensesAsync(); // Refresh the list
+            Snackbar.Add("Expense added successfully", Severity.Success);
+        }
     }
 
     private async Task ExportToCSV()

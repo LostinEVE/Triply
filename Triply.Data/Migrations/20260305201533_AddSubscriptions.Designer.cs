@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Triply.Data;
 
@@ -10,9 +11,11 @@ using Triply.Data;
 namespace Triply.Data.Migrations
 {
     [DbContext(typeof(TriplyDbContext))]
-    partial class TriplyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260305201533_AddSubscriptions")]
+    partial class AddSubscriptions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.3");

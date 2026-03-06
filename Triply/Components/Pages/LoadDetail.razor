@@ -1,0 +1,364 @@
+@page "/loads/{LoadId:guid}"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+
+<PageTitle>@(_load?.LoadNumber ?? "Load") - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Inventory" Class="mr-2" />
+    @(_load?.LoadNumber ?? "Load Details")
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_load != null)
+{
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="3" Class="mb-3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Load Information</MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                        @if (!_editing)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                          Color="Color.Primary" 
+                                          OnClick="@(() => _editing = true)" />
+                        }
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudForm @ref="_form" @bind-IsValid="@_formValid">
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudSelect @bind-Value="_load.CustomerId"
+                                          Label="Customer"
+                                          T="Guid"
+                                          Required="true"
+                                          Disabled="@(!_editing)"
+                                          Variant="Variant.Outlined"
+                                          ToStringFunc="@(id => _customers.FirstOrDefault(c => c.CustomerId == id)?.CompanyName ?? "Select Customer")">
+                                    @foreach (var customer in _customers)
+                                    {
+                                        <MudSelectItem Value="@customer.CustomerId">@customer.CompanyName</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_load.LoadNumber"
+                                             Label="Load Number"
+                                             Required="true"
+                                             Disabled="@(!_editing)"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.subtitle1" Class="mt-2 mb-2">Pickup Information</MudText>
+                            </MudItem>
+
+                            <MudItem xs="12" md="4">
+                                <MudTextField @bind-Value="_load.PickupCity"
+                                             Label="City"
+                                             Required="true"
+                                             Disabled="@(!_editing)"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="2">
+                                <MudTextField @bind-Value="_load.PickupState"
+                                             Label="State"
+                                             Required="true"
+                                             Disabled="@(!_editing)"
+                                             MaxLength="2"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudDatePicker @bind-Date="_pickupDate"
+                                              Label="Pickup Date"
+                                              Required="true"
+                                              Disabled="@(!_editing)"
+                                              Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.subtitle1" Class="mt-2 mb-2">Delivery Information</MudText>
+                            </MudItem>
+
+                            <MudItem xs="12" md="4">
+                                <MudTextField @bind-Value="_load.DeliveryCity"
+                                             Label="City"
+                                             Required="true"
+                                             Disabled="@(!_editing)"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="2">
+                                <MudTextField @bind-Value="_load.DeliveryState"
+                                             Label="State"
+                                             Required="true"
+                                             Disabled="@(!_editing)"
+                                             MaxLength="2"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudDatePicker @bind-Date="_deliveryDate"
+                                              Label="Delivery Date"
+                                              Disabled="@(!_editing)"
+                                              Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.subtitle1" Class="mt-2 mb-2">Load Details</MudText>
+                            </MudItem>
+
+                            <MudItem xs="12" md="4">
+                                <MudNumericField @bind-Value="_load.Miles"
+                                                Label="Miles"
+                                                Required="true"
+                                                Min="0"
+                                                Disabled="@(!_editing)"
+                                                Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="4">
+                                <MudNumericField @bind-Value="_load.Rate"
+                                                Label="Rate per Mile"
+                                                Required="true"
+                                                Min="0"
+                                                Format="C2"
+                                                Disabled="@(!_editing)"
+                                                Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="4">
+                                <MudNumericField Value="@(_load.Miles * _load.Rate)"
+                                                Label="Total Amount"
+                                                ReadOnly="true"
+                                                Format="C2"
+                                                Variant="Variant.Outlined"
+                                                HelperText="Calculated" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudSelect @bind-Value="_load.Status"
+                                          Label="Status"
+                                          T="LoadStatus"
+                                          Disabled="@(!_editing)"
+                                          Variant="Variant.Outlined">
+                                    @foreach (LoadStatus status in Enum.GetValues(typeof(LoadStatus)))
+                                    {
+                                        <MudSelectItem Value="@status">@status</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudSelect @bind-Value="_load.TruckId"
+                                          Label="Truck (Optional)"
+                                          T="string"
+                                          Clearable="true"
+                                          Disabled="@(!_editing)"
+                                          Variant="Variant.Outlined">
+                                    @foreach (var truck in _trucks)
+                                    {
+                                        <MudSelectItem Value="@truck.TruckId">@truck.TruckId</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_load.Notes"
+                                             Label="Notes"
+                                             Lines="4"
+                                             Disabled="@(!_editing)"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudForm>
+                </MudCardContent>
+
+                @if (_editing)
+                {
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Default"
+                                  OnClick="CancelEdit">
+                            Cancel
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Primary"
+                                  StartIcon="@Icons.Material.Filled.Save"
+                                  OnClick="SaveAsync"
+                                  Disabled="@(!_formValid)">
+                            Save Changes
+                        </MudButton>
+                    </MudCardActions>
+                }
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Actions</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Primary" 
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.Description"
+                                  OnClick="CreateInvoice">
+                            Create Invoice
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Default" 
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.Print">
+                            Print Load Sheet
+                        </MudButton>
+
+                        <MudDivider />
+
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Error" 
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.Delete">
+                            Delete Load
+                        </MudButton>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+else
+{
+    <MudAlert Severity="Severity.Error">Load not found</MudAlert>
+}
+
+@code {
+    [Parameter]
+    public Guid LoadId { get; set; }
+
+    private Load? _load;
+    private List<Customer> _customers = new();
+    private List<Truck> _trucks = new();
+    private DateTime? _pickupDate;
+    private DateTime? _deliveryDate;
+
+    private MudForm _form = default!;
+    private bool _formValid;
+    private bool _loading = false;
+    private bool _editing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomersAsync();
+        await LoadTrucksAsync();
+        await LoadLoadAsync();
+    }
+
+    private async Task LoadCustomersAsync()
+    {
+        _customers = await UnitOfWork.Customers.GetQueryable()
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.CompanyName)
+            .ToListAsync();
+    }
+
+    private async Task LoadTrucksAsync()
+    {
+        _trucks = await UnitOfWork.Trucks.GetQueryable()
+            .OrderBy(t => t.TruckId)
+            .ToListAsync();
+    }
+
+    private async Task LoadLoadAsync()
+    {
+        try
+        {
+            _loading = true;
+
+            _load = await UnitOfWork.Loads.GetQueryable()
+                .Include(l => l.Customer)
+                .Include(l => l.Truck)
+                .FirstOrDefaultAsync(l => l.LoadId == LoadId);
+
+            if (_load != null)
+            {
+                _pickupDate = _load.PickupDate;
+                _deliveryDate = _load.DeliveryDate;
+            }
+            else
+            {
+                Snackbar.Add("Load not found", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading load: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            if (_load == null) return;
+
+            if (_pickupDate.HasValue)
+            {
+                _load.PickupDate = _pickupDate.Value;
+            }
+
+            if (_deliveryDate.HasValue)
+            {
+                _load.DeliveryDate = _deliveryDate.Value;
+            }
+
+            _load.TotalAmount = _load.Miles * _load.Rate;
+
+            await UnitOfWork.Loads.UpdateAsync(_load);
+            await UnitOfWork.SaveChangesAsync();
+
+            Snackbar.Add("Load updated successfully", Severity.Success);
+            _editing = false;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving load: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void CancelEdit()
+    {
+        _editing = false;
+        _ = LoadLoadAsync(); // Reload original data
+    }
+
+    private void CreateInvoice()
+    {
+        NavigationManager.NavigateTo("/invoices/create");
+    }
+}

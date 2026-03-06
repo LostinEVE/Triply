@@ -31,21 +31,35 @@ else
                     <MudForm @ref="_form" @bind-IsValid="@_formValid">
                         <MudGrid>
                             <MudItem xs="12" md="6">
-                                <MudSelect @bind-Value="_invoice.CustomerId" 
-                                          Label="Customer" 
-                                          T="Guid"
-                                          Variant="Variant.Outlined"
-                                          Required="true"
-                                          Disabled="@(!_isNew)">
-                                    @foreach (var customer in _customers)
+                                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End">
+                                    <MudSelect @bind-Value="_invoice.CustomerId" 
+                                              Label="Customer" 
+                                              T="Guid"
+                                              Variant="Variant.Outlined"
+                                              Required="true"
+                                              Disabled="@(!_isNew)"
+                                              ToStringFunc="@(id => _customers.FirstOrDefault(c => c.CustomerId == id)?.CompanyName ?? "Select Customer")"
+                                              Class="flex-grow-1">
+                                        @foreach (var customer in _customers)
+                                        {
+                                            <MudSelectItem Value="@customer.CustomerId">
+                                                @customer.CompanyName
+                                            </MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    @if (_isNew)
                                     {
-                                        <MudSelectItem Value="@customer.CustomerId">
-                                            @customer.CompanyName
-                                        </MudSelectItem>
+                                        <MudTooltip Text="Add New Customer">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Add" 
+                                                          Color="Color.Primary" 
+                                                          Variant="Variant.Filled"
+                                                          OnClick="OpenAddCustomerDialogAsync"
+                                                          Size="Size.Large" />
+                                        </MudTooltip>
                                     }
-                                </MudSelect>
+                                </MudStack>
                             </MudItem>
-                            
+
                             <MudItem xs="12" md="6">
                                 <MudTextField Value="@_invoice.InvoiceNumber" 
                                              Label="Invoice Number" 
@@ -344,25 +358,52 @@ else
         }
     }
 
+    private async Task OpenAddCustomerDialogAsync()
+    {
+        var parameters = new DialogParameters
+        {
+            { "OnCustomerCreated", EventCallback.Factory.Create<Guid>(this, async (customerId) =>
+                {
+                    // Reload customers
+                    await LoadCustomersAsync();
+
+                    // Auto-select the newly created customer
+                    _invoice.CustomerId = customerId;
+
+                    Snackbar.Add("Customer added and selected", Severity.Success);
+                })
+            }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true,
+            CloseButton = true
+        };
+
+        await DialogService.ShowAsync<QuickAddCustomer>("Add New Customer", parameters, options);
+    }
+
     private async Task LoadInvoiceAsync()
     {
         try
         {
             _loading = true;
-            
+
             var invoice = await UnitOfWork.Invoices.GetQueryable()
                 .Include(i => i.Customer)
                 .Include(i => i.LineItems)
                     .ThenInclude(li => li.Load)
                 .FirstOrDefaultAsync(i => i.InvoiceId == InvoiceId);
-            
+
             if (invoice != null)
             {
                 _invoice = invoice;
                 _invoiceDate = invoice.InvoiceDate;
                 _dueDate = invoice.DueDate;
                 _selectedCustomer = invoice.Customer;
-                
+
                 // Calculate tax rate from existing amounts
                 if (_invoice.Subtotal > 0)
                 {

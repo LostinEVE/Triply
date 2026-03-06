@@ -11,6 +11,7 @@
 @inject IDialogService DialogService
 @inject IEmailService EmailService
 @inject IPdfGenerationService PdfService
+@inject IPrintService PrintService
 
 <PageTitle>Invoice @(_invoice?.InvoiceNumber ?? "") - Triply</PageTitle>
 
@@ -72,14 +73,13 @@ else if (_invoice != null)
                                 Resend
                             </MudButton>
                         }
-                        
-                        <MudButton Variant="Variant.Outlined" 
-                                  Color="Color.Default" 
-                                  StartIcon="@Icons.Material.Filled.PictureAsPdf"
-                                  OnClick="DownloadPDFAsync">
-                            Download PDF
-                        </MudButton>
-                        
+
+                        <MudDivider Vertical="true" FlexItem="true" Class="mx-2" />
+
+                        <ExportButtons PdfBytes="@_pdfBytes" 
+                                     FileName="@($"Invoice_{_invoice.InvoiceNumber}.pdf")"
+                                     OnRefresh="@(async () => await GeneratePdfAsync())" />
+
                         @if (_invoice.Status != InvoiceStatus.Paid && _invoice.Status != InvoiceStatus.Void)
                         {
                             <MudButton Variant="Variant.Outlined" 
@@ -306,8 +306,9 @@ else if (_invoice != null)
 
     private Invoice? _invoice;
     private bool _loading = true;
-    
-    private bool IsOverdue => _invoice != null && 
+    private byte[]? _pdfBytes;
+
+    private bool IsOverdue => _invoice != null &&
         _invoice.DueDate < DateTime.Now.Date && 
         _invoice.Status != InvoiceStatus.Paid && 
         _invoice.Status != InvoiceStatus.Void;
@@ -428,16 +429,28 @@ else if (_invoice != null)
 
     private async Task DownloadPDFAsync()
     {
+        await GeneratePdfAsync();
+    }
+
+    private async Task GeneratePdfAsync()
+    {
         try
         {
             if (_invoice == null) return;
-            
-            // TODO: Implement PDF download
-            Snackbar.Add("PDF download coming soon", Severity.Info);
+
+            var settings = await UnitOfWork.CompanySettings.GetQueryable().FirstOrDefaultAsync();
+            if (settings == null)
+            {
+                Snackbar.Add("Company settings not found. Please configure in settings.", Severity.Warning);
+                return;
+            }
+
+            _pdfBytes = await PdfService.GenerateInvoiceAsync(_invoice, settings);
+            Snackbar.Add("PDF generated successfully", Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error downloading PDF: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Error generating PDF: {ex.Message}", Severity.Error);
         }
     }
 

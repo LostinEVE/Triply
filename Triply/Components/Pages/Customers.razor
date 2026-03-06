@@ -1,0 +1,204 @@
+@page "/customers"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Interfaces
+@using Triply.Components.Shared
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+@inject IDialogService DialogService
+
+<PageTitle>Customers - Triply</PageTitle>
+
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">
+        <MudIcon Icon="@Icons.Material.Filled.Business" Class="mr-2" />
+        Customers
+        @if (_customers != null)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-2">@_customers.Count total</MudChip>
+        }
+    </MudText>
+    
+    <MudButton Variant="Variant.Filled" 
+              Color="Color.Primary" 
+              StartIcon="@Icons.Material.Filled.Add"
+              OnClick="OpenQuickAddCustomerAsync">
+        Add Customer
+    </MudButton>
+</MudStack>
+
+<MudCard Elevation="3" Class="mb-3">
+    <MudCardContent>
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center">
+            <MudTextField @bind-Value="_searchString"
+                         Placeholder="Search customers..."
+                         Adornment="Adornment.Start"
+                         AdornmentIcon="@Icons.Material.Filled.Search"
+                         Immediate="true"
+                         DebounceInterval="300"
+                         OnDebounceIntervalElapsed="SearchCustomers"
+                         Class="flex-grow-1" />
+
+            <MudSwitch @bind-Value="_showActiveOnly" 
+                      Label="Active Only" 
+                      Color="Color.Primary"
+                      T="bool" />
+        </MudStack>
+    </MudCardContent>
+</MudCard>
+
+<MudCard Elevation="3">
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else
+    {
+        <MudCardContent>
+            <MudDataGrid T="Customer"
+                        Items="@_filteredCustomers"
+                        Dense="true"
+                        Hover="true"
+                        ReadOnly="true"
+                        RowClick="@OnRowClick">
+                <Columns>
+                    <PropertyColumn Property="x => x.CompanyName" Title="Company" />
+                    <PropertyColumn Property="x => x.ContactName" Title="Contact" />
+                    <PropertyColumn Property="x => x.ContactPhone" Title="Phone" />
+                    <PropertyColumn Property="x => x.ContactEmail" Title="Email" />
+                    <TemplateColumn Title="Location">
+                        <CellTemplate>
+                            @if (!string.IsNullOrEmpty(context.Item.BillingCity))
+                            {
+                                @context.Item.BillingCity
+                                @if (!string.IsNullOrEmpty(context.Item.BillingState))
+                                {
+                                    <text>, @context.Item.BillingState</text>
+                                }
+                            }
+                        </CellTemplate>
+                    </TemplateColumn>
+                    <PropertyColumn Property="x => x.PaymentTerms" Title="Terms" />
+                    <TemplateColumn Title="Status">
+                        <CellTemplate>
+                            <MudChip T="string" 
+                                    Size="Size.Small" 
+                                    Color="@(context.Item.IsActive ? Color.Success : Color.Default)">
+                                @(context.Item.IsActive ? "Active" : "Inactive")
+                            </MudChip>
+                        </CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Title="Actions" Sortable="false">
+                        <CellTemplate>
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                          Size="Size.Small"
+                                          Color="Color.Primary"
+                                          OnClick="@((e) => EditCustomer(context.Item))" />
+                        </CellTemplate>
+                    </TemplateColumn>
+                </Columns>
+                <NoRecordsContent>
+                    <MudAlert Severity="Severity.Info">No customers found</MudAlert>
+                </NoRecordsContent>
+            </MudDataGrid>
+        </MudCardContent>
+    }
+</MudCard>
+
+@code {
+    private List<Customer> _customers = new();
+    private List<Customer> _filteredCustomers = new();
+    private string _searchString = "";
+    private bool _showActiveOnly = true;
+    private bool _loading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomersAsync();
+    }
+
+    private async Task LoadCustomersAsync()
+    {
+        try
+        {
+            _loading = true;
+
+            _customers = await UnitOfWork.Customers.GetQueryable()
+                .OrderBy(c => c.CompanyName)
+                .ToListAsync();
+
+            FilterCustomers();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading customers: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void SearchCustomers(string searchText)
+    {
+        FilterCustomers();
+    }
+
+    private void FilterCustomers()
+    {
+        _filteredCustomers = _customers;
+
+        // Apply active filter
+        if (_showActiveOnly)
+        {
+            _filteredCustomers = _filteredCustomers.Where(c => c.IsActive).ToList();
+        }
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(_searchString))
+        {
+            _filteredCustomers = _filteredCustomers.Where(c =>
+                c.CompanyName.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+                (c.ContactName?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (c.ContactEmail?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (c.ContactPhone?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ?? false)
+            ).ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task OpenQuickAddCustomerAsync()
+    {
+        var parameters = new DialogParameters
+        {
+            { "OnCustomerCreated", EventCallback.Factory.Create<Guid>(this, async (customerId) =>
+                {
+                    await LoadCustomersAsync();
+                    Snackbar.Add("Customer created successfully", Severity.Success);
+                })
+            }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true,
+            CloseButton = true
+        };
+
+        await DialogService.ShowAsync<QuickAddCustomer>("Add New Customer", parameters, options);
+    }
+
+    private void OnRowClick(DataGridRowClickEventArgs<Customer> args)
+    {
+        NavigationManager.NavigateTo($"/customers/{args.Item.CustomerId}");
+    }
+
+    private void EditCustomer(Customer customer)
+    {
+        NavigationManager.NavigateTo($"/customers/{customer.CustomerId}");
+    }
+}

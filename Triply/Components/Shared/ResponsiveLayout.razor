@@ -1,0 +1,32 @@
+@using MudBlazor
+
+@* Mobile View (< 960px) *@
+<MudHidden Breakpoint="Breakpoint.MdAndUp">
+    @MobileContent
+</MudHidden>
+
+@* Tablet View (960px - 1280px) *@
+@if (TabletContent != null)
+{
+    <MudHidden Breakpoint="Breakpoint.SmAndDown" HiddenChanged="@((bool hidden) => StateHasChanged())">
+        <MudHidden Breakpoint="Breakpoint.LgAndUp">
+            @TabletContent
+        </MudHidden>
+    </MudHidden>
+}
+
+@* Desktop View (> 1280px) *@
+<MudHidden Breakpoint="Breakpoint.MdAndDown">
+    @DesktopContent
+</MudHidden>
+
+@code {
+    [Parameter, EditorRequired]
+    public RenderFragment? MobileContent { get; set; }
+
+    [Parameter]
+    public RenderFragment? TabletContent { get; set; }
+
+    [Parameter, EditorRequired]
+    public RenderFragment? DesktopContent { get; set; }
+}

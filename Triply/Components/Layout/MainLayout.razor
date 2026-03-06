@@ -7,6 +7,12 @@
 <MudThemeProvider @bind-IsDarkMode="@_isDarkMode" Theme="_theme" />
 <MudDialogProvider />
 <MudSnackbarProvider />
+<MudPopoverProvider />
+
+<GlobalLoadingOverlay />
+<KeyboardShortcuts OnNew="@HandleNewShortcut" 
+                  OnSave="@HandleSaveShortcut" 
+                  OnPrint="@HandlePrintShortcut" />
 
 <MudLayout>
     <MudAppBar Elevation="2" Dense="true">
@@ -67,7 +73,7 @@
 
     <MudDrawer @bind-Open="_drawerOpen" 
                Elevation="2" 
-               ClipMode="DrawerClipMode.Always"
+               Variant="@(_isMobile ? DrawerVariant.Temporary : DrawerVariant.Responsive)"
                Breakpoint="Breakpoint.Md">
         <MudDrawerHeader Class="pa-4">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
@@ -155,34 +161,53 @@
     {
         PaletteLight = new PaletteLight()
         {
-            Primary = "#1976d2",
-            Secondary = "#424242",
-            AppbarBackground = "#1976d2",
-            Background = "#f5f5f5",
-            DrawerBackground = "#ffffff",
+            Primary = "#FF6B35",        // Trucking Orange
+            Secondary = "#004E89",      // Deep Blue (reliability)
+            Tertiary = "#1A659E",       // Sky Blue (roads/highways)
+            AppbarBackground = "#004E89",
+            Background = "#F7F9FB",
+            Surface = "#FFFFFF",
+            DrawerBackground = "#FFFFFF",
             DrawerText = "rgba(0,0,0,0.87)",
-            Success = "#4caf50",
-            Error = "#f44336",
-            Warning = "#ff9800",
-            Info = "#2196f3"
+            Success = "#2E7D32",        // Green (delivered/success)
+            Error = "#C62828",          // Red (alerts/overdue)
+            Warning = "#F57C00",        // Amber (warnings/due soon)
+            Info = "#0277BD",           // Blue (information)
+            TextPrimary = "#1A1A1A",
+            TextSecondary = "rgba(0,0,0,0.6)",
+            ActionDefault = "#004E89",
+            Divider = "rgba(0,0,0,0.12)"
         },
         PaletteDark = new PaletteDark()
         {
-            Primary = "#90caf9",
-            Secondary = "#424242",
-            AppbarBackground = "#1e1e1e",
+            Primary = "#FF8C5A",        // Lighter trucking orange
+            Secondary = "#1A659E",      // Medium blue
+            Tertiary = "#4A90E2",       // Brighter sky blue
+            AppbarBackground = "#1A1A1A",
             Background = "#121212",
-            DrawerBackground = "#1e1e1e",
+            Surface = "#1E1E1E",
+            DrawerBackground = "#1E1E1E",
             DrawerText = "rgba(255,255,255,0.87)",
-            Success = "#66bb6a",
-            Error = "#ef5350",
-            Warning = "#ffa726",
-            Info = "#42a5f5"
+            Success = "#66BB6A",        // Bright green
+            Error = "#EF5350",          // Bright red
+            Warning = "#FFA726",        // Bright amber
+            Info = "#42A5F5",           // Bright blue
+            TextPrimary = "rgba(255,255,255,0.87)",
+            TextSecondary = "rgba(255,255,255,0.6)",
+            ActionDefault = "#FF8C5A",
+            Divider = "rgba(255,255,255,0.12)"
         }
     };
 
     protected override void OnInitialized()
     {
+        // Detect if running on mobile platform
+#if ANDROID || IOS
+        _isMobile = true;
+#else
+        _isMobile = false;
+#endif
+
         // Load theme preference from local storage
         _isDarkMode = false; // TODO: Load from preferences
 
@@ -209,6 +234,7 @@
         _showQuickActions = false;
         NavigationManager.NavigateTo(url);
 
+        // Auto-close drawer on mobile after navigation
         if (_isMobile)
         {
             _drawerOpen = false;
@@ -240,5 +266,34 @@
             // Expense was added successfully
             StateHasChanged();
         }
+    }
+
+    // Keyboard shortcut handlers
+    private void HandleNewShortcut()
+    {
+        // Context-aware: detect current page and trigger appropriate "new" action
+        var currentPath = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+
+        if (currentPath.Contains("loads"))
+            NavigateTo("/loads/add");
+        else if (currentPath.Contains("invoices"))
+            NavigateTo("/invoices/create");
+        else if (currentPath.Contains("expenses"))
+            _ = QuickAddExpenseAsync();
+        else if (currentPath.Contains("fuel"))
+            NavigateTo("/fuel/add");
+        else
+            _ = QuickAddExpenseAsync(); // Default
+    }
+
+    private void HandleSaveShortcut()
+    {
+        // This would need to trigger save on the current page
+        // Pages should listen to a global save event or implement their own shortcuts
+    }
+
+    private void HandlePrintShortcut()
+    {
+        // Trigger print on current page if applicable
     }
 }

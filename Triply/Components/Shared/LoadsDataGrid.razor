@@ -1,0 +1,64 @@
+@using MudBlazor
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@inject NavigationManager NavigationManager
+
+<MudDataGrid T="Load" 
+             Items="@Loads" 
+             Dense="true"
+             Hover="true"
+             ReadOnly="true"
+             Filterable="false"
+             SortMode="SortMode.None"
+             RowClick="@OnRowClick">
+    <Columns>
+        <PropertyColumn Property="x => x.LoadNumber" Title="Load #" />
+        <PropertyColumn Property="x => x.Customer.CompanyName" Title="Customer" />
+        <TemplateColumn Title="Route">
+            <CellTemplate>
+                @context.Item.PickupCity, @context.Item.PickupState → @context.Item.DeliveryCity, @context.Item.DeliveryState
+            </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="x => x.PickupDate" Title="Pickup" Format="MM/dd/yyyy" />
+        <PropertyColumn Property="x => x.Miles" Title="Miles" Format="N0" />
+        <PropertyColumn Property="x => x.TotalAmount" Title="Amount" Format="C2" />
+        <TemplateColumn Title="Status">
+            <CellTemplate>
+                <MudChip T="string" 
+                         Size="Size.Small" 
+                         Color="@GetStatusColor(context.Item.Status)">
+                    @context.Item.Status
+                </MudChip>
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        <MudAlert Severity="Severity.Info">No loads found</MudAlert>
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    [Parameter]
+    public List<Load> Loads { get; set; } = new();
+
+    [Parameter]
+    public EventCallback OnRefresh { get; set; }
+
+    private void OnRowClick(DataGridRowClickEventArgs<Load> args)
+    {
+        NavigationManager.NavigateTo($"/loads/{args.Item.LoadId}");
+    }
+
+    private Color GetStatusColor(LoadStatus status)
+    {
+        return status switch
+        {
+            LoadStatus.Booked => Color.Info,
+            LoadStatus.InTransit => Color.Primary,
+            LoadStatus.Delivered => Color.Success,
+            LoadStatus.Invoiced => Color.Success,
+            LoadStatus.Paid => Color.Success,
+            _ => Color.Default
+        };
+    }
+}

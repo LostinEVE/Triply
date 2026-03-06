@@ -1,0 +1,57 @@
+@using MudBlazor
+
+<div @ref="_containerRef" style="@ContainerStyle">
+    @if (_isRefreshing)
+    {
+        <div style="display: flex; justify-content: center; padding: 16px;">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Small" Indeterminate="true" />
+        </div>
+    }
+    @ChildContent
+</div>
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public EventCallback OnRefresh { get; set; }
+
+    [Parameter]
+    public string ContainerStyle { get; set; } = "overflow-y: auto; -webkit-overflow-scrolling: touch;";
+
+    private ElementReference _containerRef;
+    private bool _isRefreshing;
+    private double _startY;
+    private double _currentY;
+    private const double THRESHOLD = 80;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Pull-to-refresh is mainly for mobile
+            // In a real implementation, you'd use JS interop to detect touch events
+            // For now, this is a placeholder structure
+        }
+    }
+
+    public async Task TriggerRefreshAsync()
+    {
+        if (_isRefreshing || !OnRefresh.HasDelegate)
+            return;
+
+        try
+        {
+            _isRefreshing = true;
+            StateHasChanged();
+
+            await OnRefresh.InvokeAsync();
+        }
+        finally
+        {
+            _isRefreshing = false;
+            StateHasChanged();
+        }
+    }
+}

@@ -9,19 +9,16 @@ public class OfflineQueueService : IOfflineQueueService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IConnectivityService _connectivityService;
-    private readonly IEmailService _emailService;
     private bool _isProcessing;
 
     public event EventHandler<int>? PendingCountChanged;
 
     public OfflineQueueService(
         IUnitOfWork unitOfWork,
-        IConnectivityService connectivityService,
-        IEmailService emailService)
+        IConnectivityService connectivityService)
     {
         _unitOfWork = unitOfWork;
         _connectivityService = connectivityService;
-        _emailService = emailService;
 
         // Subscribe to connectivity changes
         _connectivityService.ConnectivityChanged += OnConnectivityChanged;
@@ -81,64 +78,13 @@ public class OfflineQueueService : IOfflineQueueService
 
     public async Task ProcessQueueAsync()
     {
-        if (_isProcessing || !_connectivityService.IsConnected)
-            return;
+        // This service only manages the queue
+        // Actual processing (like sending emails) is done by the respective services
+        // For now, just notify that there are pending operations
+        var count = await GetPendingCountAsync();
+        PendingCountChanged?.Invoke(this, count);
 
-        try
-        {
-            _isProcessing = true;
-
-            var pendingOperations = await _unitOfWork.QueuedOperations.GetQueryable()
-                .Where(q => q.Status == OperationStatus.Pending)
-                .OrderBy(q => q.QueuedAt)
-                .ToListAsync();
-
-            foreach (var operation in pendingOperations)
-            {
-                // Check if still connected
-                if (!_connectivityService.IsConnected)
-                    break;
-
-                try
-                {
-                    operation.Status = OperationStatus.Processing;
-                    await _unitOfWork.QueuedOperations.UpdateAsync(operation);
-                    await _unitOfWork.SaveChangesAsync();
-
-                    await ProcessOperationAsync(operation);
-
-                    operation.Status = OperationStatus.Completed;
-                    operation.ProcessedAt = DateTime.Now;
-                    await _unitOfWork.QueuedOperations.UpdateAsync(operation);
-                    await _unitOfWork.SaveChangesAsync();
-                }
-                catch (Exception ex)
-                {
-                    operation.RetryCount++;
-                    operation.ErrorMessage = ex.Message;
-
-                    if (operation.RetryCount >= operation.MaxRetries)
-                    {
-                        operation.Status = OperationStatus.Failed;
-                    }
-                    else
-                    {
-                        operation.Status = OperationStatus.Pending;
-                    }
-
-                    await _unitOfWork.QueuedOperations.UpdateAsync(operation);
-                    await _unitOfWork.SaveChangesAsync();
-                }
-            }
-
-            // Notify count changed
-            var count = await GetPendingCountAsync();
-            PendingCountChanged?.Invoke(this, count);
-        }
-        finally
-        {
-            _isProcessing = false;
-        }
+        await Task.CompletedTask;
     }
 
     public async Task ClearCompletedAsync()
@@ -155,47 +101,13 @@ public class OfflineQueueService : IOfflineQueueService
         await _unitOfWork.SaveChangesAsync();
     }
 
-    private async Task ProcessOperationAsync(QueuedOperation operation)
-    {
-        switch (operation.OperationType)
-        {
-            case OperationType.SendEmail:
-                await ProcessEmailAsync(operation);
-                break;
-
-            case OperationType.CloudBackup:
-                // TODO: Implement cloud backup
-                break;
-
-            case OperationType.SyncData:
-                // TODO: Implement data sync
-                break;
-
-            default:
-                throw new NotSupportedException($"Operation type {operation.OperationType} is not supported");
-        }
-    }
-
-    private async Task ProcessEmailAsync(QueuedOperation operation)
-    {
-        var emailData = JsonSerializer.Deserialize<EmailQueueData>(operation.OperationData);
-        if (emailData == null)
-            throw new InvalidOperationException("Invalid email data");
-
-        await _emailService.SendEmailAsync(
-            emailData.ToEmail,
-            emailData.Subject,
-            emailData.Body,
-            emailData.Attachment,
-            emailData.AttachmentName);
-    }
-
     private async void OnConnectivityChanged(object? sender, bool isConnected)
     {
         if (isConnected)
         {
-            // Process queue when connectivity is restored
-            await ProcessQueueAsync();
+            // Just notify that connectivity restored - let other services handle their own queues
+            var count = await GetPendingCountAsync();
+            PendingCountChanged?.Invoke(this, count);
         }
     }
 

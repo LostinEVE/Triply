@@ -1,0 +1,229 @@
+@using MudBlazor
+@using Triply.Core.Models
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@using Microsoft.EntityFrameworkCore
+@inject IUnitOfWork UnitOfWork
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudStack Spacing="3">
+                <MudSelect @bind-Value="_load.CustomerId"
+                          Label="Customer"
+                          T="Guid"
+                          Required="true"
+                          Variant="Variant.Outlined"
+                          ToStringFunc="@(id => _customers.FirstOrDefault(c => c.CustomerId == id)?.CompanyName ?? "Select Customer")">
+                    @foreach (var customer in _customers)
+                    {
+                        <MudSelectItem Value="@customer.CustomerId">@customer.CompanyName</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudTextField @bind-Value="_load.LoadNumber"
+                             Label="Load Number"
+                             Required="true"
+                             Variant="Variant.Outlined" />
+
+                <MudText Typo="Typo.subtitle2" Class="mt-2">Pickup Information</MudText>
+
+                <MudStack Row="true" Spacing="2">
+                    <MudTextField @bind-Value="_load.PickupCity"
+                                 Label="City"
+                                 Required="true"
+                                 Variant="Variant.Outlined" />
+
+                    <MudTextField @bind-Value="_load.PickupState"
+                                 Label="State"
+                                 Required="true"
+                                 Variant="Variant.Outlined"
+                                 MaxLength="2" />
+                </MudStack>
+
+                <MudDatePicker @bind-Date="_pickupDate"
+                              Label="Pickup Date"
+                              Required="true"
+                              Variant="Variant.Outlined" />
+
+                <MudText Typo="Typo.subtitle2" Class="mt-2">Delivery Information</MudText>
+
+                <MudStack Row="true" Spacing="2">
+                    <MudTextField @bind-Value="_load.DeliveryCity"
+                                 Label="City"
+                                 Required="true"
+                                 Variant="Variant.Outlined" />
+
+                    <MudTextField @bind-Value="_load.DeliveryState"
+                                 Label="State"
+                                 Required="true"
+                                 Variant="Variant.Outlined"
+                                 MaxLength="2" />
+                </MudStack>
+
+                <MudDatePicker @bind-Date="_deliveryDate"
+                              Label="Delivery Date"
+                              Variant="Variant.Outlined" />
+
+                <MudText Typo="Typo.subtitle2" Class="mt-2">Load Details</MudText>
+
+                <MudNumericField @bind-Value="_load.Miles"
+                                Label="Miles"
+                                Required="true"
+                                Min="0"
+                                Variant="Variant.Outlined" />
+
+                <MudNumericField @bind-Value="_load.Rate"
+                                Label="Rate per Mile"
+                                Required="true"
+                                Min="0"
+                                Format="C2"
+                                Variant="Variant.Outlined" />
+
+                <MudNumericField Value="@_load.TotalAmount"
+                                Label="Total Amount"
+                                ReadOnly="true"
+                                Format="C2"
+                                Variant="Variant.Outlined"
+                                HelperText="Calculated automatically" />
+
+                <MudSelect @bind-Value="_load.TruckId"
+                          Label="Truck (Optional)"
+                          T="string"
+                          Clearable="true"
+                          Variant="Variant.Outlined">
+                    @foreach (var truck in _trucks)
+                    {
+                        <MudSelectItem Value="@truck.TruckId">@truck.TruckId</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="OnCancelClick">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                  Variant="Variant.Filled"
+                  OnClick="SaveAsync"
+                  Disabled="@(!_isValid || _saving)">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Save Load
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter]
+    public EventCallback<Guid> OnLoadCreated { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private MudForm _form = default!;
+    private bool _isValid;
+    private bool _saving;
+    private Load _load = new() { Status = LoadStatus.Booked };
+    private List<Customer> _customers = new();
+    private List<Truck> _trucks = new();
+    private DateTime? _pickupDate = DateTime.Now;
+    private DateTime? _deliveryDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomersAsync();
+        await LoadTrucksAsync();
+        _load.LoadNumber = await GenerateLoadNumberAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Recalculate total when parameters change
+        _load.TotalAmount = _load.Miles * _load.Rate;
+    }
+
+    private async Task LoadCustomersAsync()
+    {
+        _customers = await UnitOfWork.Customers.GetQueryable()
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.CompanyName)
+            .ToListAsync();
+    }
+
+    private async Task LoadTrucksAsync()
+    {
+        _trucks = await UnitOfWork.Trucks.GetQueryable()
+            .OrderBy(t => t.TruckId)
+            .ToListAsync();
+    }
+
+    private async Task<string> GenerateLoadNumberAsync()
+    {
+        var lastLoad = await UnitOfWork.Loads.GetQueryable()
+            .OrderByDescending(l => l.PickupDate)
+            .FirstOrDefaultAsync();
+
+        if (lastLoad != null && !string.IsNullOrEmpty(lastLoad.LoadNumber))
+        {
+            var numberPart = new string(lastLoad.LoadNumber.Where(char.IsDigit).ToArray());
+            if (int.TryParse(numberPart, out int lastNumber))
+            {
+                return $"LOAD-{(lastNumber + 1):D6}";
+            }
+        }
+
+        return $"LOAD-{DateTime.Now:yyyyMMdd}001";
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!_isValid) return;
+
+        try
+        {
+            _saving = true;
+
+            if (_pickupDate.HasValue)
+            {
+                _load.PickupDate = _pickupDate.Value;
+            }
+
+            if (_deliveryDate.HasValue)
+            {
+                _load.DeliveryDate = _deliveryDate.Value;
+            }
+
+            _load.LoadId = Guid.NewGuid();
+            _load.TotalAmount = _load.Miles * _load.Rate;
+
+            await UnitOfWork.Loads.AddAsync(_load);
+            await UnitOfWork.SaveChangesAsync();
+
+            Snackbar.Add($"Load '{_load.LoadNumber}' created successfully", Severity.Success);
+
+            if (OnLoadCreated.HasDelegate)
+            {
+                await OnLoadCreated.InvokeAsync(_load.LoadId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error creating load: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task OnCancelClick()
+    {
+        if (OnCancel.HasDelegate)
+        {
+            await OnCancel.InvokeAsync();
+        }
+    }
+}

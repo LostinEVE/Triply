@@ -1,6 +1,10 @@
 @page "/settings"
 @using MudBlazor
+@using Triply.Core.Interfaces
 @inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject ISubscriptionService SubscriptionService
 
 <PageTitle>Settings - Triply</PageTitle>
 
@@ -16,7 +20,7 @@
 <MudGrid>
     <!-- Company Information -->
     <MudItem xs="12" sm="6" md="4">
-        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/settings/company"))">
+        <MudCard Elevation="3">
             <MudCardContent>
                 <MudStack AlignItems="AlignItems.Center" Spacing="2">
                     <MudIcon Icon="@Icons.Material.Filled.Business" 
@@ -34,16 +38,17 @@
                 <MudButton Variant="Variant.Text" 
                           Color="Color.Primary" 
                           FullWidth="true"
-                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                          EndIcon="@Icons.Material.Filled.ChevronRight"
+                          OnClick="@(() => NavigateTo("/settings/company"))">
                     Configure
                 </MudButton>
             </MudCardActions>
         </MudCard>
     </MudItem>
-    
+
     <!-- Email Setup -->
     <MudItem xs="12" sm="6" md="4">
-        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/settings/email"))">
+        <MudCard Elevation="3">
             <MudCardContent>
                 <MudStack AlignItems="AlignItems.Center" Spacing="2">
                     <MudIcon Icon="@Icons.Material.Filled.Email" 
@@ -61,16 +66,17 @@
                 <MudButton Variant="Variant.Text" 
                           Color="Color.Info" 
                           FullWidth="true"
-                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                          EndIcon="@Icons.Material.Filled.ChevronRight"
+                          OnClick="@(() => NavigateTo("/settings/email"))">
                     Configure
                 </MudButton>
             </MudCardActions>
         </MudCard>
     </MudItem>
-    
+
     <!-- Tax Settings -->
     <MudItem xs="12" sm="6" md="4">
-        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/settings/tax"))">
+        <MudCard Elevation="3">
             <MudCardContent>
                 <MudStack AlignItems="AlignItems.Center" Spacing="2">
                     <MudIcon Icon="@Icons.Material.Filled.AccountBalance" 
@@ -88,16 +94,17 @@
                 <MudButton Variant="Variant.Text" 
                           Color="Color.Warning" 
                           FullWidth="true"
-                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                          EndIcon="@Icons.Material.Filled.ChevronRight"
+                          OnClick="@(() => NavigateTo("/settings/tax"))">
                     Configure
                 </MudButton>
             </MudCardActions>
         </MudCard>
     </MudItem>
-    
+
     <!-- Data Management -->
     <MudItem xs="12" sm="6" md="4">
-        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/settings/data"))">
+        <MudCard Elevation="3">
             <MudCardContent>
                 <MudStack AlignItems="AlignItems.Center" Spacing="2">
                     <MudIcon Icon="@Icons.Material.Filled.Storage" 
@@ -115,7 +122,8 @@
                 <MudButton Variant="Variant.Text" 
                           Color="Color.Secondary" 
                           FullWidth="true"
-                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                          EndIcon="@Icons.Material.Filled.ChevronRight"
+                          OnClick="@(() => NavigateTo("/settings/data"))">
                     Manage
                 </MudButton>
             </MudCardActions>
@@ -124,7 +132,7 @@
 
     <!-- Notifications -->
     <MudItem xs="12" sm="6" md="4">
-        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => NavigateTo("/settings/notifications"))">
+        <MudCard Elevation="3">
             <MudCardContent>
                 <MudStack AlignItems="AlignItems.Center" Spacing="2">
                     <MudIcon Icon="@Icons.Material.Filled.Notifications" 
@@ -142,7 +150,8 @@
                 <MudButton Variant="Variant.Text" 
                           Color="Color.Warning" 
                           FullWidth="true"
-                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                          EndIcon="@Icons.Material.Filled.ChevronRight"
+                          OnClick="@(() => NavigateTo("/settings/notifications"))">
                     Configure
                 </MudButton>
             </MudCardActions>
@@ -152,7 +161,7 @@
     
     <!-- About -->
     <MudItem xs="12" sm="6" md="4">
-        <MudCard Elevation="3" Class="cursor-pointer" @onclick="@(() => ShowAboutDialog())">
+        <MudCard Elevation="3">
             <MudCardContent>
                 <MudStack AlignItems="AlignItems.Center" Spacing="2">
                     <MudIcon Icon="@Icons.Material.Filled.Info" 
@@ -170,13 +179,14 @@
                 <MudButton Variant="Variant.Text" 
                           Color="Color.Default" 
                           FullWidth="true"
-                          EndIcon="@Icons.Material.Filled.ChevronRight">
+                          EndIcon="@Icons.Material.Filled.ChevronRight"
+                          OnClick="ShowAboutDialog">
                     View
                 </MudButton>
             </MudCardActions>
         </MudCard>
     </MudItem>
-    
+
     <!-- Preferences -->
     <MudItem xs="12" sm="6" md="4">
         <MudCard Elevation="3">
@@ -209,12 +219,85 @@
             </MudCardContent>
         </MudCard>
     </MudItem>
+
+    <!-- Admin Setup (Developer/Owner Only) -->
+    <MudItem xs="12" sm="6" md="4">
+        <MudCard Elevation="3" Style="@(_isAdmin ? "border: 3px solid var(--mud-palette-success);" : "border: 2px solid var(--mud-palette-warning);")">
+            <MudCardContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" 
+                            Size="Size.Large" 
+                            Color="@(_isAdmin ? Color.Success : Color.Warning)" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">
+                        Admin Access
+                    </MudText>
+
+                    @if (_isAdmin)
+                    {
+                        <MudAlert Severity="Severity.Success" Dense="true">
+                            <strong>✅ Admin Enabled</strong><br/>
+                            You have unlimited access!
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                            Owner/Developer: Enable unlimited access
+                        </MudText>
+                    }
+
+                    @if (!string.IsNullOrEmpty(_currentUserId))
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            User ID: @_currentUserId.Substring(0, Math.Min(20, _currentUserId.Length))...
+                        </MudText>
+                    }
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                @if (!_isAdmin)
+                {
+                    <MudButton Variant="Variant.Filled" 
+                              Color="Color.Warning" 
+                              FullWidth="true"
+                              StartIcon="@Icons.Material.Filled.VpnKey"
+                              OnClick="SetupAdminAccessAsync">
+                        Setup Admin Access
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined" 
+                              Color="Color.Default" 
+                              FullWidth="true"
+                              StartIcon="@Icons.Material.Filled.Refresh"
+                              OnClick="CheckAdminStatusAsync">
+                        Refresh Status
+                    </MudButton>
+                }
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
 </MudGrid>
 
 @code {
     private bool _darkMode = false;
     private bool _notifications = true;
     private bool _autoSave = true;
+    private bool _isAdmin = false;
+    private string _currentUserId = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckAdminStatusAsync();
+    }
+
+    private async Task CheckAdminStatusAsync()
+    {
+        _isAdmin = await SubscriptionService.IsAdminAsync();
+        _currentUserId = Preferences.Get("DeviceUserId", "Not Set");
+        StateHasChanged();
+    }
 
     private void NavigateTo(string url)
     {
@@ -223,7 +306,42 @@
 
     private void ShowAboutDialog()
     {
-        // TODO: Implement about dialog with version info
         NavigationManager.NavigateTo("/about");
+    }
+
+    private async Task SetupAdminAccessAsync()
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", "This will give you unlimited access to all features without any subscription. Only enable this if you are the app owner/developer.\n\nContinue?" },
+            { "ButtonText", "Yes, Enable Admin" },
+            { "Color", Color.Warning }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Enable Admin Access", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            // Set admin user ID
+            Preferences.Set("DeviceUserId", "admin@triply.app");
+
+            // Immediately check status
+            await CheckAdminStatusAsync();
+
+            if (_isAdmin)
+            {
+                Snackbar.Add("✅ Admin access enabled! You now have unlimited access!", Severity.Success, config =>
+                {
+                    config.VisibleStateDuration = 5000;
+                });
+            }
+            else
+            {
+                Snackbar.Add("⚠️ Admin setup complete. Please restart the app to apply changes.", Severity.Warning);
+            }
+        }
     }
 }

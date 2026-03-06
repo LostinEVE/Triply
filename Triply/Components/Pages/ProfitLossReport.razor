@@ -4,9 +4,12 @@
 @using CoreCompanySettings = Triply.Core.Models.CompanySettings
 @using Triply.Core.Models
 @using Triply.Core.Interfaces
+@using Triply.Components.Shared
+@using Triply.Services
 @inject IUnitOfWork UnitOfWork
 @inject ISnackbar Snackbar
 @inject IPdfGenerationService PdfService
+@inject IPrintService PrintService
 
 <PageTitle>Profit & Loss Report - Triply</PageTitle>
 
@@ -63,24 +66,16 @@
                       Disabled="@_loading">
                 Run Report
             </MudButton>
-            
+
             <MudSpacer />
-            
+
             @if (_report != null)
             {
-                <MudButton Variant="Variant.Outlined" 
-                          Color="Color.Default" 
-                          StartIcon="@Icons.Material.Filled.Print"
-                          OnClick="PrintReport">
-                    Print
-                </MudButton>
-                
-                <MudButton Variant="Variant.Outlined" 
-                          Color="Color.Error" 
-                          StartIcon="@Icons.Material.Filled.PictureAsPdf"
-                          OnClick="ExportToPDFAsync">
-                    Export PDF
-                </MudButton>
+                <ExportButtons PdfBytes="@_pdfBytes"
+                             FileName="@($"ProfitLoss_{_startDate:yyyy-MM-dd}_to_{_endDate:yyyy-MM-dd}.pdf")"
+                             CsvFileName="@($"ProfitLoss_{_startDate:yyyy-MM-dd}_to_{_endDate:yyyy-MM-dd}.csv")"
+                             OnExportCsv="@ExportToCsvAsync"
+                             OnRefresh="@GenerateReportAsync" />
             }
         </MudStack>
     </MudCardContent>
@@ -271,7 +266,8 @@ else
     private IncomeStatement? _priorReport;
     private CoreCompanySettings _companySettings = new();
     private List<Truck> _trucks = new();
-    
+    private byte[]? _pdfBytes;
+
     private bool _loading = false;
     private string _selectedPeriod = "thisMonth";
     private string _selectedTruckId = "";
@@ -430,28 +426,66 @@ else
         return prior != 0 ? ((current - prior) / Math.Abs(prior)) * 100 : 0;
     }
 
-    private void PrintReport()
-    {
-        // TODO: Implement print functionality
-        Snackbar.Add("Print functionality coming soon", Severity.Info);
-    }
-
-    private async Task ExportToPDFAsync()
+    private async Task GenerateReportAsync()
     {
         try
         {
-            if (_report == null) return;
-            
-            var pdfBytes = await PdfService.GenerateProfitLossReportAsync(_report, _companySettings, _priorReport);
-            
-            // Trigger download
-            var fileName = $"ProfitLoss_{_report.StartDate:yyyyMMdd}_{_report.EndDate:yyyyMMdd}.pdf";
-            // TODO: Implement file download
+            if (_report == null)
+            {
+                Snackbar.Add("Please run the report first", Severity.Warning);
+                return;
+            }
+
+            _pdfBytes = await PdfService.GenerateProfitLossReportAsync(_report, _companySettings, _priorReport);
             Snackbar.Add("PDF generated successfully", Severity.Success);
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Error generating PDF: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ExportToCsvAsync()
+    {
+        try
+        {
+            if (_report == null) return;
+
+            var csv = new System.Text.StringBuilder();
+            csv.AppendLine($"Profit & Loss Report,{_report.StartDate:MM/dd/yyyy} to {_report.EndDate:MM/dd/yyyy}");
+            csv.AppendLine();
+
+            csv.AppendLine("Revenue");
+            csv.AppendLine($"Total Revenue,{_report.TotalRevenue}");
+            csv.AppendLine();
+
+            csv.AppendLine("Cost of Goods Sold");
+            csv.AppendLine($"Total COGS,{_report.TotalCOGS}");
+            csv.AppendLine($"Gross Profit,{_report.GrossProfit}");
+            csv.AppendLine($"Gross Profit Margin,{_report.GrossProfitMargin}%");
+            csv.AppendLine();
+
+            csv.AppendLine("Operating Expenses");
+            foreach (var expense in _report.OperatingExpenses.OrderByDescending(e => e.Balance))
+            {
+                csv.AppendLine($"{expense.AccountName},{expense.Balance}");
+            }
+            csv.AppendLine($"Total Operating Expenses,{_report.TotalOperatingExpenses}");
+            csv.AppendLine();
+
+            csv.AppendLine("Summary");
+            csv.AppendLine($"Net Income,{_report.NetIncome}");
+            csv.AppendLine($"Net Profit Margin,{_report.NetProfitMargin}%");
+
+            await CsvExportHelper.SaveCsvAsync(
+                csv.ToString(),
+                $"ProfitLoss_{_report.StartDate:yyyy-MM-dd}_to_{_report.EndDate:yyyy-MM-dd}.csv");
+
+            Snackbar.Add("CSV exported successfully", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error exporting CSV: {ex.Message}", Severity.Error);
         }
     }
 }

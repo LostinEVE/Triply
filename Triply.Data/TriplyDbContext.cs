@@ -29,10 +29,19 @@ public class TriplyDbContext : DbContext
     public DbSet<EmailOutboxQueue> EmailOutboxQueue { get; set; } = null!;
     public DbSet<QueuedOperation> QueuedOperations { get; set; } = null!;
     public DbSet<NotificationSettings> NotificationSettings { get; set; } = null!;
+    public DbSet<Subscription> Subscriptions { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // Subscription configuration
+        modelBuilder.Entity<Subscription>(entity =>
+        {
+            entity.HasKey(e => e.SubscriptionId);
+            entity.Property(e => e.UserId).IsRequired().HasMaxLength(255);
+            entity.HasIndex(e => e.UserId);
+        });
 
         // Truck configuration
         modelBuilder.Entity<Truck>(entity =>

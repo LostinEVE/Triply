@@ -1,0 +1,120 @@
+@using MudBlazor
+@using Triply.Core.Models
+@using Triply.Core.Interfaces
+@inject IUnitOfWork UnitOfWork
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudStack Spacing="3">
+                <MudTextField @bind-Value="_customer.CompanyName"
+                             Label="Company Name"
+                             Required="true"
+                             RequiredError="Company name is required"
+                             Variant="Variant.Outlined" />
+
+                <MudTextField @bind-Value="_customer.ContactName"
+                             Label="Contact Name"
+                             Variant="Variant.Outlined" />
+
+                <MudTextField @bind-Value="_customer.ContactEmail"
+                             Label="Email"
+                             InputType="InputType.Email"
+                             Variant="Variant.Outlined" />
+
+                <MudTextField @bind-Value="_customer.ContactPhone"
+                             Label="Phone"
+                             Variant="Variant.Outlined" />
+
+                <MudTextField @bind-Value="_customer.BillingAddress"
+                             Label="Billing Address"
+                             Lines="3"
+                             Variant="Variant.Outlined" />
+
+                <MudTextField @bind-Value="_customer.BillingCity"
+                             Label="City"
+                             Variant="Variant.Outlined" />
+
+                <MudStack Row="true" Spacing="2">
+                    <MudTextField @bind-Value="_customer.BillingState"
+                                 Label="State"
+                                 Variant="Variant.Outlined" />
+
+                    <MudTextField @bind-Value="_customer.BillingZip"
+                                 Label="ZIP Code"
+                                 Variant="Variant.Outlined" />
+                </MudStack>
+
+                <MudTextField @bind-Value="_customer.PaymentTerms"
+                             Label="Payment Terms"
+                             Variant="Variant.Outlined"
+                             HelperText="e.g., Net30, Net15" />
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="OnCancelClick">Cancel</MudButton>
+        <MudButton Color="Color.Primary" 
+                  Variant="Variant.Filled" 
+                  OnClick="SaveAsync"
+                  Disabled="@(!_isValid || _saving)">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Save Customer
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter]
+    public EventCallback<Guid> OnCustomerCreated { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private MudForm _form = default!;
+    private bool _isValid;
+    private bool _saving;
+    private Customer _customer = new() { IsActive = true, PaymentTerms = "Net30" };
+
+    private async Task SaveAsync()
+    {
+        if (!_isValid) return;
+
+        try
+        {
+            _saving = true;
+
+            _customer.CustomerId = Guid.NewGuid();
+            await UnitOfWork.Customers.AddAsync(_customer);
+            await UnitOfWork.SaveChangesAsync();
+
+            Snackbar.Add($"Customer '{_customer.CompanyName}' created successfully", Severity.Success);
+
+            if (OnCustomerCreated.HasDelegate)
+            {
+                await OnCustomerCreated.InvokeAsync(_customer.CustomerId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error creating customer: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task OnCancelClick()
+    {
+        if (OnCancel.HasDelegate)
+        {
+            await OnCancel.InvokeAsync();
+        }
+    }
+}

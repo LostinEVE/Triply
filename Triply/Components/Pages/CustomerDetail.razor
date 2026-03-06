@@ -1,0 +1,375 @@
+@page "/customers/{CustomerId:guid}"
+@using MudBlazor
+@using Microsoft.EntityFrameworkCore
+@using Triply.Core.Models
+@using Triply.Core.Interfaces
+@using Triply.Components.Shared
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IUnitOfWork UnitOfWork
+@inject IDialogService DialogService
+
+<PageTitle>@(_customer?.CompanyName ?? "Customer") - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.Business" Class="mr-2" />
+    @(_customer?.CompanyName ?? "Customer Details")
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_customer != null)
+{
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Customer Information</MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                        @if (!_editing)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                          Color="Color.Primary" 
+                                          OnClick="@(() => _editing = true)" />
+                        }
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudForm @ref="_form" @bind-IsValid="@_formValid">
+                        <MudGrid>
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_customer.CompanyName"
+                                             Label="Company Name"
+                                             Required="true"
+                                             Disabled="@(!_editing)"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_customer.ContactName"
+                                             Label="Contact Name"
+                                             Disabled="@(!_editing)"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_customer.ContactEmail"
+                                             Label="Email"
+                                             InputType="InputType.Email"
+                                             Disabled="@(!_editing)"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_customer.ContactPhone"
+                                             Label="Phone"
+                                             Disabled="@(!_editing)"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_customer.PaymentTerms"
+                                             Label="Payment Terms"
+                                             Disabled="@(!_editing)"
+                                             Variant="Variant.Outlined"
+                                             HelperText="e.g., Net30, Net15" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.subtitle1" Class="mt-2 mb-2">Billing Address</MudText>
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_customer.BillingAddress"
+                                             Label="Street Address"
+                                             Lines="2"
+                                             Disabled="@(!_editing)"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_customer.BillingCity"
+                                             Label="City"
+                                             Disabled="@(!_editing)"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="3">
+                                <MudTextField @bind-Value="_customer.BillingState"
+                                             Label="State"
+                                             MaxLength="2"
+                                             Disabled="@(!_editing)"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="3">
+                                <MudTextField @bind-Value="_customer.BillingZip"
+                                             Label="ZIP Code"
+                                             Disabled="@(!_editing)"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_customer.Notes"
+                                             Label="Notes"
+                                             Lines="4"
+                                             Disabled="@(!_editing)"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudSwitch @bind-Value="_customer.IsActive"
+                                          Label="Active Customer"
+                                          Color="Color.Success"
+                                          Disabled="@(!_editing)"
+                                          T="bool" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudForm>
+                </MudCardContent>
+
+                @if (_editing)
+                {
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Default"
+                                  OnClick="CancelEdit">
+                            Cancel
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Primary"
+                                  StartIcon="@Icons.Material.Filled.Save"
+                                  OnClick="SaveAsync"
+                                  Disabled="@(!_formValid)">
+                            Save Changes
+                        </MudButton>
+                    </MudCardActions>
+                }
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3" Class="mb-3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Quick Stats</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <div>
+                            <MudText Typo="Typo.caption">Total Loads</MudText>
+                            <MudText Typo="Typo.h6">@_customer.Loads.Count</MudText>
+                        </div>
+                        <MudDivider />
+                        <div>
+                            <MudText Typo="Typo.caption">Total Invoices</MudText>
+                            <MudText Typo="Typo.h6">@_customer.Invoices.Count</MudText>
+                        </div>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Actions</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Primary" 
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.Add"
+                                  OnClick="CreateLoad">
+                            Create Load
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Success" 
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.Description"
+                                  OnClick="CreateInvoice">
+                            Create Invoice
+                        </MudButton>
+
+                        <MudDivider />
+
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Default" 
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.History"
+                                  OnClick="ViewLoads">
+                            View All Loads
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Default" 
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.Receipt"
+                                  OnClick="ViewInvoices">
+                            View All Invoices
+                        </MudButton>
+
+                        <MudDivider />
+
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Error" 
+                                  FullWidth="true"
+                                  StartIcon="@Icons.Material.Filled.Delete"
+                                  OnClick="DeleteCustomerAsync">
+                            Delete Customer
+                        </MudButton>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+else
+{
+    <MudAlert Severity="Severity.Error">Customer not found</MudAlert>
+}
+
+@code {
+    [Parameter]
+    public Guid CustomerId { get; set; }
+
+    private Customer? _customer;
+    private MudForm _form = default!;
+    private bool _formValid;
+    private bool _loading = false;
+    private bool _editing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomerAsync();
+    }
+
+    private async Task LoadCustomerAsync()
+    {
+        try
+        {
+            _loading = true;
+
+            _customer = await UnitOfWork.Customers.GetQueryable()
+                .Include(c => c.Loads)
+                .Include(c => c.Invoices)
+                .FirstOrDefaultAsync(c => c.CustomerId == CustomerId);
+
+            if (_customer == null)
+            {
+                Snackbar.Add("Customer not found", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading customer: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            if (_customer == null) return;
+
+            await UnitOfWork.Customers.UpdateAsync(_customer);
+            await UnitOfWork.SaveChangesAsync();
+
+            Snackbar.Add("Customer updated successfully", Severity.Success);
+            _editing = false;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving customer: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void CancelEdit()
+    {
+        _editing = false;
+        _ = LoadCustomerAsync(); // Reload original data
+    }
+
+    private void CreateLoad()
+    {
+        NavigationManager.NavigateTo($"/loads/add?customerId={CustomerId}");
+    }
+
+    private void CreateInvoice()
+    {
+        NavigationManager.NavigateTo($"/invoices/create?customerId={CustomerId}");
+    }
+
+    private void ViewLoads()
+    {
+        NavigationManager.NavigateTo($"/loads?customerId={CustomerId}");
+    }
+
+    private void ViewInvoices()
+    {
+        NavigationManager.NavigateTo($"/invoices?customerId={CustomerId}");
+    }
+
+    private async Task DeleteCustomerAsync()
+    {
+        if (_customer == null) return;
+
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Are you sure you want to delete customer '{_customer.CompanyName}'?\n\nThis customer has:\n• {_customer.Loads.Count} load(s)\n• {_customer.Invoices.Count} invoice(s)\n\nThis action cannot be undone!" },
+            { "ButtonText", "Yes, Delete" },
+            { "Color", Color.Error }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Customer", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            try
+            {
+                // Check if customer has loads or invoices
+                if (_customer.Loads.Any() || _customer.Invoices.Any())
+                {
+                    var secondConfirm = await DialogService.ShowAsync<ConfirmDialog>(
+                        "Warning: Customer Has Data",
+                        new DialogParameters
+                        {
+                            { "ContentText", "This customer has existing loads or invoices. Deleting will remove all related data.\n\nAre you absolutely sure?" },
+                            { "ButtonText", "Yes, Delete Everything" },
+                            { "Color", Color.Error }
+                        },
+                        options);
+
+                    var secondResult = await secondConfirm.Result;
+                    if (secondResult.Canceled) return;
+                }
+
+                await UnitOfWork.Customers.DeleteAsync(_customer);
+                await UnitOfWork.SaveChangesAsync();
+
+                Snackbar.Add($"Customer '{_customer.CompanyName}' deleted successfully", Severity.Success);
+
+                // Navigate back to customers list
+                NavigationManager.NavigateTo("/customers");
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error deleting customer: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

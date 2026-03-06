@@ -71,6 +71,8 @@ namespace Triply
             Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<IConnectivityService, ConnectivityService>(builder.Services);
             Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<ICameraService, CameraService>(builder.Services);
             Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<INotificationService, NotificationService>(builder.Services);
+            Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<IPrintService, PrintService>(builder.Services);
+            Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<ILoadingStateService, LoadingStateService>(builder.Services);
             Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<IOfflineQueueService, OfflineQueueService>(builder.Services);
             Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<IPdfGenerationService, PdfGenerationService>(builder.Services);
             Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<EmailService>(builder.Services);
@@ -82,6 +84,9 @@ namespace Triply
             Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<Triply.Services.TaxEstimatorService>(builder.Services);
             Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<Triply.Services.AccountingService>(builder.Services);
             Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<Triply.Services.InvoiceService>(builder.Services);
+
+            // Register subscription service
+            Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<ISubscriptionService, SubscriptionService>(builder.Services);
 
             // Register enhanced services with validation and error handling
             Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<TruckService>(builder.Services);

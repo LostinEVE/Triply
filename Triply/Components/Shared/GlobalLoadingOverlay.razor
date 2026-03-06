@@ -1,0 +1,34 @@
+@using MudBlazor
+@using Triply.Core.Interfaces
+@implements IDisposable
+@inject ILoadingStateService LoadingState
+
+@if (LoadingState.IsLoading)
+{
+    <MudOverlay Visible="true" DarkBackground="true" ZIndex="9999">
+        <MudStack AlignItems="AlignItems.Center" Spacing="3">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+            @if (!string.IsNullOrEmpty(LoadingState.LoadingMessage))
+            {
+                <MudText Typo="Typo.h6" Color="Color.Primary">@LoadingState.LoadingMessage</MudText>
+            }
+        </MudStack>
+    </MudOverlay>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        LoadingState.LoadingStateChanged += OnLoadingStateChanged;
+    }
+
+    private void OnLoadingStateChanged(object? sender, EventArgs e)
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        LoadingState.LoadingStateChanged -= OnLoadingStateChanged;
+    }
+}

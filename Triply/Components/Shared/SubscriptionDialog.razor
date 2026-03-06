@@ -1,0 +1,241 @@
+@using MudBlazor
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject ISubscriptionService SubscriptionService
+@inject NavigationManager NavigationManager
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="4" Class="pa-4">
+            @if (_tier == SubscriptionTier.Free && _daysRemaining == 0)
+            {
+                <!-- Free User - Start Trial -->
+                <MudText Typo="Typo.h5" Align="Align.Center" Color="Color.Primary">
+                    Welcome to Triply!
+                </MudText>
+                
+                <MudText Typo="Typo.body1" Align="Align.Center">
+                    Start your <strong>14-day free trial</strong> to unlock all Pro features
+                </MudText>
+
+                <MudPaper Elevation="2" Class="pa-4">
+                    <MudText Typo="Typo.h6" GutterBottom="true">✨ Pro Features:</MudText>
+                    <MudList Dense="true" T="string">
+                        <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                            Unlimited Loads & Customers
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                            Invoice Generation & Email
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                            IFTA Reports & Tax Tracking
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                            Expense & Fuel Management
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                            Advanced Analytics & Reports
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Check" IconColor="Color.Success" T="string">
+                            Cloud Sync & Backup
+                        </MudListItem>
+                    </MudList>
+                </MudPaper>
+
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          FullWidth="true"
+                          Size="Size.Large"
+                          OnClick="StartTrialAsync">
+                    Start Free 14-Day Trial
+                </MudButton>
+
+                <MudText Typo="Typo.caption" Align="Align.Center" Class="mud-text-secondary">
+                    No credit card required • Cancel anytime
+                </MudText>
+            }
+            else if (_tier == SubscriptionTier.Trial)
+            {
+                <!-- Trial Active -->
+                <MudText Typo="Typo.h5" Align="Align.Center" Color="Color.Success">
+                    Trial Active
+                </MudText>
+
+                <MudAlert Severity="Severity.Info">
+                    <strong>@_daysRemaining days</strong> remaining in your free trial
+                </MudAlert>
+
+                <MudText Typo="Typo.body1" Align="Align.Center">
+                    Upgrade now and save with our annual plan!
+                </MudText>
+
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <MudCard Elevation="@(_selectedPlan == "monthly" ? 4 : 2)" 
+                                Style="@(_selectedPlan == "monthly" ? "border: 3px solid var(--mud-palette-primary); cursor: pointer;" : "cursor: pointer; border: 1px solid #e0e0e0;")"
+                                @onclick="@(() => SelectPlan("monthly"))">
+                            <MudCardContent Class="pa-4 text-center">
+                                <MudStack>
+                                    <MudText Typo="Typo.h6">Monthly</MudText>
+                                    <MudText Typo="Typo.h4" Color="Color.Primary">$9.99</MudText>
+                                    <MudText Typo="Typo.caption">/month</MudText>
+                                    <MudButton Variant="Variant.Filled"
+                                              Color="Color.Primary"
+                                              FullWidth="true"
+                                              Class="mt-2"
+                                              OnClick="@(() => UpgradeAsync(false))">
+                                        Subscribe
+                                    </MudButton>
+                                </MudStack>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudCard Elevation="@(_selectedPlan == "yearly" ? 4 : 2)"
+                                Style="@(_selectedPlan == "yearly" ? "border: 3px solid var(--mud-palette-success); cursor: pointer;" : "cursor: pointer; border: 1px solid #e0e0e0;")"
+                                @onclick="@(() => SelectPlan("yearly"))">
+                            <MudCardContent Class="pa-4 text-center">
+                                <MudStack>
+                                    <MudChip T="string" Text="Best Value" Color="Color.Success" Size="Size.Small" />
+                                    <MudText Typo="Typo.h6">Yearly</MudText>
+                                    <MudText Typo="Typo.h4" Color="Color.Success">$99</MudText>
+                                    <MudText Typo="Typo.caption">/year</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Success">Save $20!</MudText>
+                                    <MudButton Variant="Variant.Filled"
+                                              Color="Color.Success"
+                                              FullWidth="true"
+                                              Class="mt-2"
+                                              OnClick="@(() => UpgradeAsync(true))">
+                                        Subscribe
+                                    </MudButton>
+                                </MudStack>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            }
+            else
+            {
+                <!-- Trial Expired or Free -->
+                <MudText Typo="Typo.h5" Align="Align.Center" Color="Color.Warning">
+                    Upgrade to Pro
+                </MudText>
+
+                <MudText Typo="Typo.body1" Align="Align.Center">
+                    Your trial has ended. Subscribe to continue using Triply
+                </MudText>
+
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <MudCard Elevation="@(_selectedPlan == "monthly" ? 4 : 2)"
+                                Style="@(_selectedPlan == "monthly" ? "border: 3px solid var(--mud-palette-primary); cursor: pointer;" : "cursor: pointer; border: 1px solid #e0e0e0;")"
+                                @onclick="@(() => SelectPlan("monthly"))">
+                            <MudCardContent Class="pa-4 text-center">
+                                <MudStack>
+                                    <MudText Typo="Typo.h6">Monthly</MudText>
+                                    <MudText Typo="Typo.h4" Color="Color.Primary">$9.99</MudText>
+                                    <MudText Typo="Typo.caption">/month</MudText>
+                                    <MudButton Variant="Variant.Filled"
+                                              Color="Color.Primary"
+                                              FullWidth="true"
+                                              Class="mt-2"
+                                              OnClick="@(() => UpgradeAsync(false))">
+                                        Subscribe
+                                    </MudButton>
+                                </MudStack>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudCard Elevation="@(_selectedPlan == "yearly" ? 4 : 2)"
+                                Style="@(_selectedPlan == "yearly" ? "border: 3px solid var(--mud-palette-success); cursor: pointer;" : "cursor: pointer; border: 1px solid #e0e0e0;")"
+                                @onclick="@(() => SelectPlan("yearly"))">
+                            <MudCardContent Class="pa-4 text-center">
+                                <MudStack>
+                                    <MudChip T="string" Text="Best Value" Color="Color.Success" Size="Size.Small" />
+                                    <MudText Typo="Typo.h6">Yearly</MudText>
+                                    <MudText Typo="Typo.h4" Color="Color.Success">$99</MudText>
+                                    <MudText Typo="Typo.caption">/year</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Success">Save $20!</MudText>
+                                    <MudButton Variant="Variant.Filled"
+                                              Color="Color.Success"
+                                              FullWidth="true"
+                                              Class="mt-2"
+                                              OnClick="@(() => UpgradeAsync(true))">
+                                        Subscribe
+                                    </MudButton>
+                                </MudStack>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">Maybe Later</MudButton>
+        @if (_tier != SubscriptionTier.Free)
+        {
+            <MudButton Color="Color.Default" OnClick="RestorePurchases">Restore Purchases</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter]
+    public EventCallback<bool> OnSubscribed { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancelled { get; set; }
+
+    private SubscriptionTier _tier = SubscriptionTier.Free;
+    private int _daysRemaining = 0;
+    private string _selectedPlan = "yearly"; // Default to best value
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tier = await SubscriptionService.GetCurrentTierAsync();
+        _daysRemaining = await SubscriptionService.GetDaysRemainingInTrialAsync();
+    }
+
+    private void SelectPlan(string plan)
+    {
+        _selectedPlan = plan;
+        StateHasChanged();
+    }
+
+    private async Task StartTrialAsync()
+    {
+        var success = await SubscriptionService.StartTrialAsync();
+
+        if (success && OnSubscribed.HasDelegate)
+        {
+            await OnSubscribed.InvokeAsync(true);
+        }
+    }
+
+    private async Task UpgradeAsync(bool isYearly)
+    {
+        // In production, this would trigger Google Play Billing
+        var success = await SubscriptionService.PurchaseSubscriptionAsync(isYearly);
+
+        if (success && OnSubscribed.HasDelegate)
+        {
+            await OnSubscribed.InvokeAsync(true);
+        }
+    }
+
+    private async Task RestorePurchases()
+    {
+        await SubscriptionService.RestorePurchasesAsync();
+        await OnInitializedAsync(); // Refresh
+    }
+
+    private async Task Close()
+    {
+        if (OnCancelled.HasDelegate)
+        {
+            await OnCancelled.InvokeAsync();
+        }
+    }
+}

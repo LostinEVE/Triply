@@ -1,7 +1,7 @@
 @page "/settings/notifications"
 @using MudBlazor
 @using Triply.Core.Interfaces
-@using Triply.Core.Models
+@using CoreNotificationSettings = Triply.Core.Models.NotificationSettings
 @inject INotificationService NotificationService
 @inject ISnackbar Snackbar
 
@@ -170,7 +170,7 @@ else if (_settings != null)
     private NavigationManager NavigationManager { get; set; } = default!;
 
     private bool _loading = true;
-    private NotificationSettings? _settings;
+    private CoreNotificationSettings? _settings;
 
     protected override async Task OnInitializedAsync()
     {

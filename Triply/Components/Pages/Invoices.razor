@@ -36,7 +36,8 @@
                           Label="Customer" 
                           T="Guid?"
                           Variant="Variant.Outlined"
-                          Clearable="true">
+                          Clearable="true"
+                          ToStringFunc="@(id => id.HasValue ? _customers.FirstOrDefault(c => c.CustomerId == id)?.CompanyName ?? "Unknown" : "All Customers")">
                     <MudSelectItem T="Guid?" Value="@((Guid?)null)">All Customers</MudSelectItem>
                     @foreach (var customer in _customers)
                     {

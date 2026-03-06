@@ -1,0 +1,233 @@
+@page "/help"
+@using MudBlazor
+
+<PageTitle>Help & Support - Triply</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="py-8">
+    <MudText Typo="Typo.h3" Align="Align.Center" GutterBottom="true" Class="mb-6">
+        <MudIcon Icon="@Icons.Material.Filled.Help" Size="Size.Large" Class="mr-2" />
+        Help & Support
+    </MudText>
+
+    <MudGrid>
+        <!-- Quick Start -->
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3" Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.RocketLaunch" Class="mr-2" />
+                            Getting Started
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudList Dense="true" T="string">
+                        <MudListItem Icon="@Icons.Material.Filled.ArrowRight" T="string">
+                            <strong>Add Your Truck:</strong> Go to Trucks → Add your truck details
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.ArrowRight" T="string">
+                            <strong>Add Customers:</strong> Go to Customers → Add your regular customers
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.ArrowRight" T="string">
+                            <strong>Create a Load:</strong> Go to Loads → Add Load → Enter pickup/delivery info
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.ArrowRight" T="string">
+                            <strong>Generate Invoice:</strong> From Load details → Click "Create Invoice"
+                        </MudListItem>
+                    </MudList>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Common Questions -->
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3" Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.QuestionAnswer" Class="mr-2" />
+                            Common Questions
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudExpansionPanels MultiExpansion="true">
+                        <MudExpansionPanel Text="How do I generate IFTA reports?">
+                            <MudText Typo="Typo.body2">
+                                Go to <strong>Reports → IFTA Report</strong>, select your quarter, and click Generate. 
+                                Make sure you've been logging fuel purchases for accurate reports.
+                            </MudText>
+                        </MudExpansionPanel>
+                        
+                        <MudExpansionPanel Text="Can I email invoices to customers?">
+                            <MudText Typo="Typo.body2">
+                                Yes! First, configure your email in <strong>Settings → Email Setup</strong>. 
+                                Then from any invoice, click "Email Invoice" to send it directly to your customer.
+                            </MudText>
+                        </MudExpansionPanel>
+
+                        <MudExpansionPanel Text="How do I track expenses?">
+                            <MudText Typo="Typo.body2">
+                                Go to <strong>Expenses</strong> and click "Add Expense". You can categorize expenses, 
+                                mark them as tax-deductible, and attach receipts.
+                            </MudText>
+                        </MudExpansionPanel>
+
+                        <MudExpansionPanel Text="Where is my data stored?">
+                            <MudText Typo="Typo.body2">
+                                All your data is stored locally on your device in a secure SQLite database. 
+                                Your data never leaves your device unless you enable cloud sync (Pro feature).
+                            </MudText>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Features Guide -->
+        <MudItem xs="12">
+            <MudCard Elevation="3" Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.Explore" Class="mr-2" />
+                            Features Overview
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudPaper Class="pa-3 mb-3" Elevation="0" Style="background-color: var(--mud-palette-background-gray);">
+                                <MudText Typo="Typo.h6" Color="Color.Primary">📋 Load Management</MudText>
+                                <MudText Typo="Typo.body2">
+                                    Track loads from pickup to delivery. Record miles, rates, and customer info. 
+                                    Mark loads as complete and automatically generate invoices.
+                                </MudText>
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudPaper Class="pa-3 mb-3" Elevation="0" Style="background-color: var(--mud-palette-background-gray);">
+                                <MudText Typo="Typo.h6" Color="Color.Success">💰 Invoice & Billing</MudText>
+                                <MudText Typo="Typo.body2">
+                                    Create professional invoices, email them to customers, and track payment status. 
+                                    Perfect for getting paid faster.
+                                </MudText>
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudPaper Class="pa-3 mb-3" Elevation="0" Style="background-color: var(--mud-palette-background-gray);">
+                                <MudText Typo="Typo.h6" Color="Color.Warning">⛽ IFTA Reporting</MudText>
+                                <MudText Typo="Typo.body2">
+                                    Log fuel purchases and automatically generate IFTA reports by quarter. 
+                                    No more spreadsheets or manual calculations.
+                                </MudText>
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudPaper Class="pa-3 mb-3" Elevation="0" Style="background-color: var(--mud-palette-background-gray);">
+                                <MudText Typo="Typo.h6" Color="Color.Error">📊 Expense Tracking</MudText>
+                                <MudText Typo="Typo.body2">
+                                    Track all your business expenses, categorize them, and know exactly where your money goes. 
+                                    Perfect for tax time.
+                                </MudText>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Contact Support -->
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.ContactSupport" Class="mr-2" />
+                            Need More Help?
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText Typo="Typo.body1" GutterBottom="true">
+                        I'm here to help! As a fellow owner-operator with 29 years in the industry, 
+                        I understand the challenges you face.
+                    </MudText>
+                    
+                    <MudDivider Class="my-3" />
+                    
+                    <MudStack Spacing="2">
+                        <div>
+                            <MudText Typo="Typo.subtitle2">📧 Email Support:</MudText>
+                            <MudText Typo="Typo.body2">apostolicamerican@gmail.com</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                Response within 24-48 hours
+                            </MudText>
+                        </div>
+                        
+                        <div>
+                            <MudText Typo="Typo.subtitle2">📱 Feature Requests:</MudText>
+                            <MudText Typo="Typo.body2">
+                                Have an idea for a new feature? Email me! I'm always looking to improve Triply 
+                                based on real feedback from owner-operators.
+                            </MudText>
+                        </div>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Tips & Tricks -->
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.Lightbulb" Class="mr-2" />
+                            Tips & Tricks
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudList Dense="true" T="string">
+                        <MudListItem Icon="@Icons.Material.Filled.TipsAndUpdates" IconColor="Color.Warning" T="string">
+                            <strong>Log fuel immediately</strong> after filling up for accurate IFTA reports
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.TipsAndUpdates" IconColor="Color.Warning" T="string">
+                            <strong>Take photos of receipts</strong> using the camera feature for easy record-keeping
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.TipsAndUpdates" IconColor="Color.Warning" T="string">
+                            <strong>Set up payment terms</strong> for each customer (Net30, Net15, etc.)
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.TipsAndUpdates" IconColor="Color.Warning" T="string">
+                            <strong>Review Cost Per Mile</strong> reports monthly to track profitability
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.TipsAndUpdates" IconColor="Color.Warning" T="string">
+                            <strong>Mark expenses as deductible</strong> to make tax time easier
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.TipsAndUpdates" IconColor="Color.Warning" T="string">
+                            <strong>Enable auto-save</strong> in Settings to never lose your work
+                        </MudListItem>
+                    </MudList>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Version Info -->
+        <MudItem xs="12">
+            <MudPaper Class="pa-4" Elevation="0">
+                <MudText Typo="Typo.caption" Align="Align.Center" Class="mud-text-secondary">
+                    Triply v1.0 • Built for Owner-Operators, By an Owner-Operator
+                </MudText>
+                <MudText Typo="Typo.caption" Align="Align.Center" Class="mud-text-secondary mt-1">
+                    © 2024 Triply • All rights reserved
+                </MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>

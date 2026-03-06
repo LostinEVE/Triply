@@ -1,0 +1,122 @@
+@page "/about"
+@using MudBlazor
+
+<PageTitle>About Triply - Triply</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="py-8">
+    <MudText Typo="Typo.h3" Align="Align.Center" GutterBottom="true" Class="mb-6">
+        About Triply
+    </MudText>
+
+    <MudGrid>
+        <MudItem xs="12" md="8" Class="mx-auto">
+            <MudCard Elevation="3" Class="mb-4">
+                <MudCardContent>
+                    <MudStack Spacing="4">
+                        <div>
+                            <MudText Typo="Typo.h5" Color="Color.Primary" GutterBottom="true">
+                                Built by an Owner-Operator, For Owner-Operators
+                            </MudText>
+                            <MudText Typo="Typo.body1" Class="mb-3">
+                                After <strong>29 years</strong> in the trucking industry as an owner-operator, 
+                                I understand the challenges you face every day. From managing loads and tracking expenses 
+                                to dealing with IFTA reports and invoicing customers, the administrative burden can be overwhelming.
+                            </MudText>
+                            <MudText Typo="Typo.body1" Class="mb-3">
+                                That's why I created <strong>Triply</strong> - a comprehensive business management solution 
+                                designed specifically for independent truckers and small fleet owners who know the road 
+                                like the back of their hand but need better tools to manage their business.
+                            </MudText>
+                        </div>
+
+                        <MudDivider />
+
+                        <div>
+                            <MudText Typo="Typo.h6" GutterBottom="true">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Class="mr-2" />
+                                Real Problems, Real Solutions
+                            </MudText>
+                            <MudList Dense="true" T="string">
+                                <MudListItem Icon="@Icons.Material.Filled.TrendingUp" IconColor="Color.Primary" T="string">
+                                    <strong>Load Management:</strong> Track every load from pickup to delivery and invoicing
+                                </MudListItem>
+                                <MudListItem Icon="@Icons.Material.Filled.Receipt" IconColor="Color.Primary" T="string">
+                                    <strong>Expense Tracking:</strong> Know exactly where your money is going
+                                </MudListItem>
+                                <MudListItem Icon="@Icons.Material.Filled.LocalGasStation" IconColor="Color.Primary" T="string">
+                                    <strong>IFTA Compliance:</strong> Generate accurate IFTA reports without the headache
+                                </MudListItem>
+                                <MudListItem Icon="@Icons.Material.Filled.Description" IconColor="Color.Primary" T="string">
+                                    <strong>Professional Invoicing:</strong> Get paid faster with automated invoices
+                                </MudListItem>
+                                <MudListItem Icon="@Icons.Material.Filled.Analytics" IconColor="Color.Primary" T="string">
+                                    <strong>Real Analytics:</strong> Understand your cost per mile and profitability
+                                </MudListItem>
+                            </MudList>
+                        </div>
+
+                        <MudDivider />
+
+                        <div>
+                            <MudText Typo="Typo.h6" GutterBottom="true">
+                                <MudIcon Icon="@Icons.Material.Filled.Handshake" Color="Color.Primary" Class="mr-2" />
+                                Why Triply is Different
+                            </MudText>
+                            <MudText Typo="Typo.body1" Class="mb-2">
+                                Unlike generic business software, Triply was built from the ground up for truckers:
+                            </MudText>
+                            <MudChip T="string" Text="No monthly fees for basic features" Color="Color.Success" Size="Size.Small" Class="ma-1" />
+                            <MudChip T="string" Text="Works offline on the road" Color="Color.Info" Size="Size.Small" Class="ma-1" />
+                            <MudChip T="string" Text="Simple, trucker-friendly interface" Color="Color.Primary" Size="Size.Small" Class="ma-1" />
+                            <MudChip T="string" Text="Built-in compliance tools" Color="Color.Warning" Size="Size.Small" Class="ma-1" />
+                        </div>
+
+                        <MudDivider />
+
+                        <div>
+                            <MudText Typo="Typo.h6" GutterBottom="true">
+                                <MudIcon Icon="@Icons.Material.Filled.ContactSupport" Color="Color.Info" Class="mr-2" />
+                                Support from Someone Who Gets It
+                            </MudText>
+                            <MudText Typo="Typo.body1">
+                                When you have questions, you're not talking to a call center - you're talking to 
+                                someone who has lived the trucking life. I understand the terminology, the regulations, 
+                                and most importantly, the pressure you're under to keep your business running smoothly.
+                            </MudText>
+                        </div>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+
+            <MudCard Elevation="3" Class="mb-4">
+                <MudCardContent>
+                    <MudStack Spacing="3" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.h5" Align="Align.Center">
+                            Ready to Take Control of Your Business?
+                        </MudText>
+                        <MudText Typo="Typo.body1" Align="Align.Center">
+                            Start your <strong>free 14-day trial</strong> and see why owner-operators love Triply
+                        </MudText>
+                        <MudButton Variant="Variant.Filled"
+                                  Color="Color.Primary"
+                                  Size="Size.Large"
+                                  StartIcon="@Icons.Material.Filled.RocketLaunch"
+                                  Href="/subscription">
+                            Start Free Trial
+                        </MudButton>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+
+            <MudPaper Class="pa-4" Elevation="0">
+                <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                    <MudIcon Icon="@Icons.Material.Filled.Email" Size="Size.Small" Class="mr-1" />
+                    Questions? Email: support@triply.app
+                </MudText>
+                <MudText Typo="Typo.caption" Align="Align.Center" Class="mud-text-secondary mt-2">
+                    © 2024 Triply - Built for Truckers, By a Trucker
+                </MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>

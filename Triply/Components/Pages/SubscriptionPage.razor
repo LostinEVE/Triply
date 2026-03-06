@@ -1,0 +1,213 @@
+@page "/subscription"
+@using MudBlazor
+@using Triply.Core.Enums
+@using Triply.Core.Interfaces
+@inject ISubscriptionService SubscriptionService
+@inject IDialogService DialogService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Subscription - Triply</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">
+    <MudIcon Icon="@Icons.Material.Filled.CardMembership" Class="mr-2" />
+    Your Subscription
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Current Plan</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_tier == SubscriptionTier.Admin)
+                    {
+                        <MudAlert Severity="Severity.Success">
+                            <strong>Admin Account</strong> - You have unlimited access to all features
+                        </MudAlert>
+                    }
+                    else if (_tier == SubscriptionTier.Pro)
+                    {
+                        <MudAlert Severity="Severity.Success">
+                            <strong>Pro Subscription Active</strong>
+                        </MudAlert>
+                        
+                        @if (_expiryDate.HasValue)
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-2">
+                                Renews on: <strong>@_expiryDate.Value.ToString("MMM dd, yyyy")</strong>
+                            </MudText>
+                        }
+                    }
+                    else if (_tier == SubscriptionTier.Trial)
+                    {
+                        <MudAlert Severity="Severity.Info">
+                            <strong>Free Trial Active</strong> - @_daysRemaining days remaining
+                        </MudAlert>
+                        
+                        <MudText Typo="Typo.body2" Class="mt-2">
+                            Trial ends: <strong>@_expiryDate?.ToString("MMM dd, yyyy")</strong>
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Warning">
+                            <strong>Free Plan</strong> - Limited features available
+                        </MudAlert>
+                    }
+
+                    <MudDivider Class="my-4" />
+
+                    <MudText Typo="Typo.h6" GutterBottom="true">Features:</MudText>
+                    <MudList Dense="true" T="string">
+                        <MudListItem Icon="@GetFeatureIcon(_tier >= SubscriptionTier.Trial)" 
+                                    IconColor="@GetFeatureColor(_tier >= SubscriptionTier.Trial)"
+                                    T="string">
+                            Unlimited Loads & Customers
+                        </MudListItem>
+                        <MudListItem Icon="@GetFeatureIcon(_tier >= SubscriptionTier.Trial)" 
+                                    IconColor="@GetFeatureColor(_tier >= SubscriptionTier.Trial)"
+                                    T="string">
+                            Invoice Generation
+                        </MudListItem>
+                        <MudListItem Icon="@GetFeatureIcon(_tier >= SubscriptionTier.Trial)" 
+                                    IconColor="@GetFeatureColor(_tier >= SubscriptionTier.Trial)"
+                                    T="string">
+                            IFTA Reports
+                        </MudListItem>
+                        <MudListItem Icon="@GetFeatureIcon(_tier >= SubscriptionTier.Trial)" 
+                                    IconColor="@GetFeatureColor(_tier >= SubscriptionTier.Trial)"
+                                    T="string">
+                            Advanced Analytics
+                        </MudListItem>
+                        <MudListItem Icon="@GetFeatureIcon(_tier >= SubscriptionTier.Pro)" 
+                                    IconColor="@GetFeatureColor(_tier >= SubscriptionTier.Pro)"
+                                    T="string">
+                            Cloud Sync & Backup
+                        </MudListItem>
+                    </MudList>
+                </MudCardContent>
+                
+                @if (_tier != SubscriptionTier.Admin && _tier != SubscriptionTier.Pro)
+                {
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Filled"
+                                  Color="Color.Primary"
+                                  OnClick="ShowUpgradeDialogAsync">
+                            @(_tier == SubscriptionTier.Free ? "Start Free Trial" : "Upgrade to Pro")
+                        </MudButton>
+                    </MudCardActions>
+                }
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Pricing</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudPaper Class="pa-3 mb-3" Elevation="0" Style="background-color: var(--mud-palette-background-gray);">
+                        <MudText Typo="Typo.subtitle1">Monthly</MudText>
+                        <MudText Typo="Typo.h4" Color="Color.Primary">$9.99</MudText>
+                        <MudText Typo="Typo.caption">/month</MudText>
+                    </MudPaper>
+
+                    <MudPaper Class="pa-3" Elevation="2" Style="border: 2px solid var(--mud-palette-success);">
+                        <MudChip T="string" Text="Best Value" Color="Color.Success" Size="Size.Small" />
+                        <MudText Typo="Typo.subtitle1">Yearly</MudText>
+                        <MudText Typo="Typo.h4" Color="Color.Success">$99</MudText>
+                        <MudText Typo="Typo.caption">/year</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Success" Class="mt-1">
+                            <strong>Save $20/year!</strong>
+                        </MudText>
+                    </MudPaper>
+
+                    <MudDivider Class="my-3" />
+
+                    <MudButton Variant="Variant.Text"
+                              Color="Color.Default"
+                              FullWidth="true"
+                              OnClick="RestorePurchasesAsync">
+                        Restore Purchases
+                    </MudButton>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private bool _loading = true;
+    private SubscriptionTier _tier = SubscriptionTier.Free;
+    private int _daysRemaining = 0;
+    private DateTime? _expiryDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSubscriptionInfoAsync();
+    }
+
+    private async Task LoadSubscriptionInfoAsync()
+    {
+        _loading = true;
+
+        _tier = await SubscriptionService.GetCurrentTierAsync();
+        _daysRemaining = await SubscriptionService.GetDaysRemainingInTrialAsync();
+        _expiryDate = await SubscriptionService.GetSubscriptionExpiryAsync();
+
+        _loading = false;
+    }
+
+    private async Task ShowUpgradeDialogAsync()
+    {
+        var parameters = new DialogParameters
+        {
+            { "OnSubscribed", EventCallback.Factory.Create<bool>(this, HandleSubscriptionChanged) }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true,
+            CloseButton = false
+        };
+
+        await DialogService.ShowAsync<SubscriptionDialog>("Upgrade to Pro", parameters, options);
+    }
+
+    private async Task HandleSubscriptionChanged(bool subscribed)
+    {
+        if (subscribed)
+        {
+            await LoadSubscriptionInfoAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task RestorePurchasesAsync()
+    {
+        await SubscriptionService.RestorePurchasesAsync();
+        await LoadSubscriptionInfoAsync();
+    }
+
+    private string GetFeatureIcon(bool available)
+    {
+        return available ? Icons.Material.Filled.Check : Icons.Material.Filled.Lock;
+    }
+
+    private Color GetFeatureColor(bool available)
+    {
+        return available ? Color.Success : Color.Default;
+    }
+}

@@ -1,0 +1,216 @@
+@using MudBlazor
+@using Triply.Core.Interfaces
+@inject IPrintService PrintService
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" Spacing="2">
+    @if (PdfBytes != null)
+    {
+        <MudButton Variant="Variant.Filled" 
+                  Color="Color.Primary" 
+                  StartIcon="@Icons.Material.Filled.Print"
+                  OnClick="PrintAsync"
+                  Disabled="@_processing">
+            @if (_processing && _action == "print")
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Print
+        </MudButton>
+
+        <MudButton Variant="Variant.Outlined" 
+                  Color="Color.Primary" 
+                  StartIcon="@Icons.Material.Filled.Download"
+                  OnClick="SaveAsync"
+                  Disabled="@_processing">
+            @if (_processing && _action == "save")
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Save PDF
+        </MudButton>
+
+        <MudButton Variant="Variant.Outlined" 
+                  Color="Color.Secondary" 
+                  StartIcon="@Icons.Material.Filled.Share"
+                  OnClick="ShareAsync"
+                  Disabled="@_processing">
+            @if (_processing && _action == "share")
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Share
+        </MudButton>
+    }
+
+    @if (CsvData != null && OnExportCsv.HasDelegate)
+    {
+        <MudButton Variant="Variant.Outlined" 
+                  Color="Color.Success" 
+                  StartIcon="@Icons.Material.Filled.TableChart"
+                  OnClick="ExportCsvAsync"
+                  Disabled="@_processing">
+            @if (_processing && _action == "csv")
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Export CSV
+        </MudButton>
+    }
+
+    @if (OnRefresh.HasDelegate)
+    {
+        <MudButton Variant="Variant.Text" 
+                  Color="Color.Default" 
+                  StartIcon="@Icons.Material.Filled.Refresh"
+                  OnClick="@(() => OnRefresh.InvokeAsync())"
+                  Disabled="@_processing">
+            Refresh
+        </MudButton>
+    }
+</MudStack>
+
+@code {
+    [Parameter]
+    public byte[]? PdfBytes { get; set; }
+
+    [Parameter]
+    public string FileName { get; set; } = "document.pdf";
+
+    [Parameter]
+    public string? CsvData { get; set; }
+
+    [Parameter]
+    public string CsvFileName { get; set; } = "export.csv";
+
+    [Parameter]
+    public EventCallback OnExportCsv { get; set; }
+
+    [Parameter]
+    public EventCallback OnRefresh { get; set; }
+
+    private bool _processing = false;
+    private string _action = "";
+
+    private async Task PrintAsync()
+    {
+        if (PdfBytes == null) return;
+
+        try
+        {
+            _processing = true;
+            _action = "print";
+            StateHasChanged();
+
+            var success = await PrintService.PrintPdfAsync(PdfBytes, FileName);
+
+            if (success)
+            {
+                Snackbar.Add("Print dialog opened", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to open print dialog", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error printing: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+            _action = "";
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (PdfBytes == null) return;
+
+        try
+        {
+            _processing = true;
+            _action = "save";
+            StateHasChanged();
+
+            var success = await PrintService.SavePdfAsync(PdfBytes, FileName);
+
+            if (success)
+            {
+                var folder = await PrintService.GetDownloadsFolderPathAsync();
+                Snackbar.Add($"PDF saved to {folder ?? "app folder"}", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save PDF", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+            _action = "";
+        }
+    }
+
+    private async Task ShareAsync()
+    {
+        if (PdfBytes == null) return;
+
+        try
+        {
+            _processing = true;
+            _action = "share";
+            StateHasChanged();
+
+            var success = await PrintService.SharePdfAsync(PdfBytes, FileName);
+
+            if (success)
+            {
+                Snackbar.Add("Share dialog opened", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to open share dialog", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error sharing: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+            _action = "";
+        }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        try
+        {
+            _processing = true;
+            _action = "csv";
+            StateHasChanged();
+
+            if (OnExportCsv.HasDelegate)
+            {
+                await OnExportCsv.InvokeAsync();
+                Snackbar.Add("CSV exported successfully", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error exporting CSV: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+            _action = "";
+        }
+    }
+}

@@ -1,0 +1,77 @@
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@code {
+    [Parameter]
+    public EventCallback OnNew { get; set; }
+
+    [Parameter]
+    public EventCallback OnSave { get; set; }
+
+    [Parameter]
+    public EventCallback OnPrint { get; set; }
+
+    [Parameter]
+    public EventCallback OnSearch { get; set; }
+
+    private DotNetObjectReference<KeyboardShortcuts>? _objRef;
+    private IJSObjectReference? _module;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _objRef = DotNetObjectReference.Create(this);
+            
+            try
+            {
+                _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/keyboard-shortcuts.js");
+                await _module.InvokeVoidAsync("initialize", _objRef);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing keyboard shortcuts: {ex.Message}");
+            }
+        }
+    }
+
+    [JSInvokable]
+    public async Task HandleShortcut(string action)
+    {
+        switch (action)
+        {
+            case "new":
+                if (OnNew.HasDelegate)
+                    await OnNew.InvokeAsync();
+                break;
+            case "save":
+                if (OnSave.HasDelegate)
+                    await OnSave.InvokeAsync();
+                break;
+            case "print":
+                if (OnPrint.HasDelegate)
+                    await OnPrint.InvokeAsync();
+                break;
+            case "search":
+                if (OnSearch.HasDelegate)
+                    await OnSearch.InvokeAsync();
+                break;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module != null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("dispose");
+                await _module.DisposeAsync();
+            }
+            catch { }
+        }
+
+        _objRef?.Dispose();
+    }
+}

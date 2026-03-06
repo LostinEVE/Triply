@@ -69,6 +69,10 @@
     <ItemGroup>
         <PackageReference Include="CommunityToolkit.Maui" Version="14.0.1" />
         <PackageReference Include="MailKit" Version="4.15.1" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.3">
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+          <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
         <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.3" />
         <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.41" />
         <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.41" />
@@ -82,10 +86,6 @@
       <ProjectReference Include="..\Triply.Core\Triply.Core.csproj" />
       <ProjectReference Include="..\Triply.Data\Triply.Data.csproj" />
       <ProjectReference Include="..\Triply.Services\Triply.Services.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="Components\Dialogs\" />
     </ItemGroup>
 
 </Project>
