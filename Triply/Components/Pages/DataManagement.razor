@@ -183,7 +183,7 @@
                     @if (_importResult != null)
                     {
                         <MudAlert Severity="@(_importSuccess ? Severity.Success : Severity.Error)" Dense="false">
-                            <MudText Typo="Typo.body2" Style="white-space: pre-line;">@_importResult</MudText>
+                            <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto;">@_importResult</MudText>
                         </MudAlert>
                     }
                 </MudStack>

@@ -131,58 +131,96 @@ public class DataImportExportService : IDataImportExportService
     public async Task<ImportResult> ImportFromJsonAsync(Stream jsonStream)
     {
         var result = new ImportResult();
-        
+
         try
         {
+            _logger.LogInformation("Starting JSON import...");
+
             var options = new JsonSerializerOptions
             {
-                PropertyNameCaseInsensitive = true
+                PropertyNameCaseInsensitive = true,
+                NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
             };
 
             var backupData = await JsonSerializer.DeserializeAsync<BackupData>(jsonStream, options);
-            
+
             if (backupData == null)
             {
                 result.Success = false;
-                result.Message = "Failed to deserialize backup data.";
+                result.Message = "Failed to deserialize backup data. The JSON file may be empty or corrupted.";
+                _logger.LogError("Deserialization returned null");
                 return result;
             }
 
+            _logger.LogInformation("JSON deserialized successfully");
+            _logger.LogInformation($"Found: {backupData.Trucks?.Count ?? 0} trucks, {backupData.Drivers?.Count ?? 0} drivers, {backupData.Customers?.Count ?? 0} customers");
+
             // Start a transaction
             using var transaction = await _unitOfWork.BeginTransactionAsync();
-            
+
             try
             {
                 // Import data in the correct order to respect foreign key constraints
+                _logger.LogInformation("Importing CompanySettings...");
                 await ImportCompanySettingsAsync(backupData.CompanySettings, result);
+
+                _logger.LogInformation("Importing Trucks...");
                 await ImportTrucksAsync(backupData.Trucks, result);
+
+                _logger.LogInformation("Importing Drivers...");
                 await ImportDriversAsync(backupData.Drivers, result);
+
+                _logger.LogInformation("Importing Customers...");
                 await ImportCustomersAsync(backupData.Customers, result);
+
+                _logger.LogInformation("Importing Loads...");
                 await ImportLoadsAsync(backupData.Loads, result);
+
+                _logger.LogInformation("Importing Expenses...");
                 await ImportExpensesAsync(backupData.Expenses, result);
+
+                _logger.LogInformation("Importing FuelEntries...");
                 await ImportFuelEntriesAsync(backupData.FuelEntries, result);
+
+                _logger.LogInformation("Importing MaintenanceRecords...");
                 await ImportMaintenanceRecordsAsync(backupData.MaintenanceRecords, result);
+
+                _logger.LogInformation("Importing Invoices...");
                 await ImportInvoicesAsync(backupData.Invoices, result);
+
+                _logger.LogInformation("Importing InvoiceLineItems...");
                 await ImportInvoiceLineItemsAsync(backupData.InvoiceLineItems, result);
+
+                _logger.LogInformation("Importing TaxPayments...");
                 await ImportTaxPaymentsAsync(backupData.TaxPayments, result);
 
+                _logger.LogInformation("Saving changes...");
                 await _unitOfWork.SaveChangesAsync();
                 await _unitOfWork.CommitTransactionAsync();
+                _logger.LogInformation("Transaction committed successfully");
 
                 result.Success = true;
                 result.Message = $"Successfully imported {result.TotalRecordsImported} records.";
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error during import, rolling back transaction");
                 await _unitOfWork.RollbackTransactionAsync();
                 throw;
             }
+        }
+        catch (JsonException jsonEx)
+        {
+            _logger.LogError(jsonEx, "JSON parsing error");
+            result.Success = false;
+            result.Message = $"JSON parsing failed: {jsonEx.Message}\n\nThe file may be from PostgreSQL. Please ensure it's properly formatted for SQLite.";
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error importing from JSON");
             result.Success = false;
-            result.Message = $"Import failed: {ex.Message}";
+            result.Message = $"Import failed: {ex.Message}\n\nStack trace: {ex.StackTrace}";
         }
 
         return result;
@@ -190,45 +228,99 @@ public class DataImportExportService : IDataImportExportService
 
     private async Task ImportCompanySettingsAsync(List<CompanySettings>? items, ImportResult result)
     {
-        if (items == null || !items.Any()) return;
+        if (items == null || !items.Any())
+        {
+            _logger.LogInformation("No CompanySettings to import");
+            return;
+        }
+
+        _logger.LogInformation($"Importing {items.Count} CompanySettings records");
 
         foreach (var item in items)
         {
-            var existing = await _unitOfWork.CompanySettings.GetByIdAsync(item.Id);
-            if (existing == null)
+            try
             {
-                await _unitOfWork.CompanySettings.AddAsync(item);
-                result.CompanySettingsImported++;
+                var existing = await _unitOfWork.CompanySettings.GetByIdAsync(item.Id);
+                if (existing == null)
+                {
+                    await _unitOfWork.CompanySettings.AddAsync(item);
+                    result.CompanySettingsImported++;
+                }
+                else
+                {
+                    _logger.LogInformation($"Skipping duplicate CompanySettings with ID {item.Id}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error importing CompanySettings with ID {item.Id}: {ex.Message}");
+                throw new Exception($"Failed to import CompanySettings record (ID: {item.Id}). Error: {ex.Message}", ex);
             }
         }
     }
 
     private async Task ImportTrucksAsync(List<Truck>? items, ImportResult result)
     {
-        if (items == null || !items.Any()) return;
+        if (items == null || !items.Any())
+        {
+            _logger.LogInformation("No Trucks to import");
+            return;
+        }
+
+        _logger.LogInformation($"Importing {items.Count} Truck records");
 
         foreach (var item in items)
         {
-            var existing = await _unitOfWork.Trucks.GetByIdAsync(item.TruckId);
-            if (existing == null)
+            try
             {
-                await _unitOfWork.Trucks.AddAsync(item);
-                result.TrucksImported++;
+                var existing = await _unitOfWork.Trucks.GetByIdAsync(item.TruckId);
+                if (existing == null)
+                {
+                    await _unitOfWork.Trucks.AddAsync(item);
+                    result.TrucksImported++;
+                }
+                else
+                {
+                    _logger.LogInformation($"Skipping duplicate Truck with ID {item.TruckId}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error importing Truck with ID {item.TruckId}: {ex.Message}");
+                throw new Exception($"Failed to import Truck record (ID: {item.TruckId}). Error: {ex.Message}", ex);
             }
         }
     }
 
     private async Task ImportDriversAsync(List<Driver>? items, ImportResult result)
     {
-        if (items == null || !items.Any()) return;
+        if (items == null || !items.Any())
+        {
+            _logger.LogInformation("No Drivers to import");
+            return;
+        }
+
+        _logger.LogInformation($"Importing {items.Count} Driver records");
 
         foreach (var item in items)
         {
-            var existing = await _unitOfWork.Drivers.GetByIdAsync(item.DriverId);
-            if (existing == null)
+            try
             {
-                await _unitOfWork.Drivers.AddAsync(item);
-                result.DriversImported++;
+                var existing = await _unitOfWork.Drivers.GetByIdAsync(item.DriverId);
+                if (existing == null)
+                {
+                    await _unitOfWork.Drivers.AddAsync(item);
+                    result.DriversImported++;
+                }
+                else
+                {
+                    _logger.LogInformation($"Skipping duplicate Driver with ID {item.DriverId}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error importing Driver with ID {item.DriverId}: {ex.Message}");
+                throw new Exception($"Failed to import Driver record (ID: {item.DriverId}). Error: {ex.Message}", ex);
             }
         }
     }
