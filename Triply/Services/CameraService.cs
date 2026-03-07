@@ -1,4 +1,5 @@
 using Triply.Core.Interfaces;
+using System.Linq;
 
 namespace Triply.Services;
 
@@ -43,7 +44,8 @@ public class CameraService : ICameraService
                     return null;
             }
 
-            var photo = await MediaPicker.Default.PickPhotoAsync();
+            var photos = await MediaPicker.Default.PickPhotosAsync();
+            var photo = photos?.FirstOrDefault();
             if (photo == null)
                 return null;
 
@@ -64,7 +66,11 @@ public class CameraService : ICameraService
             if (DeviceInfo.Current.Platform == DevicePlatform.Android || 
                 DeviceInfo.Current.Platform == DevicePlatform.iOS)
             {
-                var action = await Application.Current?.MainPage?.DisplayActionSheet(
+                var page = Application.Current?.Windows.FirstOrDefault()?.Page;
+                if (page == null)
+                    return await PickPhotoAsync();
+
+                var action = await page.DisplayActionSheetAsync(
                     "Add Photo",
                     "Cancel",
                     null,
@@ -139,7 +145,8 @@ public class CameraService : ICameraService
                 return imageBytes;
 
             // Resize image
-            using var resizedImage = image.Resize(new SkiaSharp.SKImageInfo(newWidth, newHeight), SkiaSharp.SKFilterQuality.High);
+            var sampling = new SkiaSharp.SKSamplingOptions(SkiaSharp.SKFilterMode.Linear, SkiaSharp.SKMipmapMode.Linear);
+            using var resizedImage = image.Resize(new SkiaSharp.SKImageInfo(newWidth, newHeight), sampling);
             if (resizedImage == null)
                 return imageBytes;
 

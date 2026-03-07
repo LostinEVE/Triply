@@ -131,13 +131,14 @@ else
                     <MudFileUpload T="IBrowserFile" 
                                   OnFilesChanged="HandleLogoUpload"
                                   Accept="image/*">
-                        <ActivatorContent>
+                        <CustomContent Context="fileUpload">
                             <MudButton Variant="Variant.Filled"
                                       Color="Color.Primary"
-                                      StartIcon="@Icons.Material.Filled.CloudUpload">
+                                      StartIcon="@Icons.Material.Filled.CloudUpload"
+                                      OnClick="@(async () => await fileUpload.OpenFilePickerAsync())">
                                 Upload Logo
                             </MudButton>
-                        </ActivatorContent>
+                        </CustomContent>
                     </MudFileUpload>
                     <MudText Typo="Typo.caption" Class="mt-2">
                         Recommended: PNG or JPG, max 2MB, square format

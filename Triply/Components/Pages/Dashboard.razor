@@ -199,7 +199,7 @@ else
                     {
                         <MudChart ChartType="ChartType.Bar" 
                                  ChartSeries="@_revenueExpenseSeries" 
-                                 XAxisLabels="@_revenueExpenseLabels"
+                                 ChartLabels="@_revenueExpenseLabels"
                                  Width="100%" 
                                  Height="350px"
                                  ChartOptions="@_chartOptions" />
@@ -227,8 +227,8 @@ else
                     {
                         <MudChart T="double" 
                                  ChartType="ChartType.Donut" 
-                                 InputData="@_expenseBreakdownData" 
-                                 InputLabels="@_expenseBreakdownLabels"
+                                 ChartSeries="@_expenseBreakdownSeries" 
+                                 ChartLabels="@_expenseBreakdownLabels"
                                  Width="100%" 
                                  Height="300px" />
                     }
@@ -255,7 +255,7 @@ else
                     {
                         <MudChart ChartType="ChartType.Line" 
                                  ChartSeries="@_cpmTrendSeries" 
-                                 XAxisLabels="@_cpmTrendLabels"
+                                 ChartLabels="@_cpmTrendLabels"
                                  Width="100%" 
                                  Height="250px"
                                  ChartOptions="@_chartOptions" />
@@ -287,7 +287,7 @@ else
                 <MudCardContent Class="pa-0" Style="max-height: 400px; overflow-y: auto;">
                     @if (_recentActivity.Any())
                     {
-                        <MudList T="string" Clickable="true" Dense="true">
+                        <MudList T="string" Dense="true">
                             @foreach (var activity in _recentActivity)
                             {
                                 <MudListItem T="string" 
@@ -447,6 +447,7 @@ else
 
     private double[] _expenseBreakdownData = Array.Empty<double>();
     private string[] _expenseBreakdownLabels = Array.Empty<string>();
+    private List<ChartSeries<double>> _expenseBreakdownSeries = new();
 
     private List<ChartSeries<double>> _cpmTrendSeries = new();
     private string[] _cpmTrendLabels = Array.Empty<string>();
@@ -606,6 +607,10 @@ else
             
             _expenseBreakdownData = expensesByCategory.Select(x => (double)x.Total).ToArray();
             _expenseBreakdownLabels = expensesByCategory.Select(x => x.Category).ToArray();
+            _expenseBreakdownSeries = new List<ChartSeries<double>>
+            {
+                new() { Name = "Expenses", Data = _expenseBreakdownData }
+            };
             
             // CPM Trend (last 6 months)
             var cpmData = new List<double>();

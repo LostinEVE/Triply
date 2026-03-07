@@ -152,13 +152,14 @@ else
                                               Accept="image/*" 
                                               OnFilesChanged="OnFileSelected"
                                               MaximumFileCount="1">
-                                    <ActivatorContent>
+                                    <CustomContent Context="fileUpload">
                                         <MudButton Variant="Variant.Filled"
                                                   Color="Color.Primary"
-                                                  StartIcon="@Icons.Material.Filled.Upload">
+                                                  StartIcon="@Icons.Material.Filled.Upload"
+                                                  OnClick="@(async () => await fileUpload.OpenFilePickerAsync())">
                                             Upload Receipt
                                         </MudButton>
-                                    </ActivatorContent>
+                                    </CustomContent>
                                 </MudFileUpload>
                                 
                                 @if (IsMobile)
@@ -374,7 +375,7 @@ else
     {
         try
         {
-            await _form.Validate();
+            await _form.ValidateAsync();
 
             if (!_formValid)
             {

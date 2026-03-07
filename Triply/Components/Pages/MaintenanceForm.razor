@@ -232,13 +232,14 @@ else
                                               Accept=".pdf,.jpg,.jpeg,.png"
                                               FilesChanged="HandleFileUpload"
                                               MaximumFileCount="1">
-                                    <ActivatorContent>
+                                    <CustomContent Context="fileUpload">
                                         <MudButton Variant="Variant.Outlined"
                                                   Color="Color.Default"
-                                                  StartIcon="@Icons.Material.Filled.CloudUpload">
+                                                  StartIcon="@Icons.Material.Filled.CloudUpload"
+                                                  OnClick="@(async () => await fileUpload.OpenFilePickerAsync())">
                                             @(_hasDocument ? "Replace Document" : "Upload Document")
                                         </MudButton>
-                                    </ActivatorContent>
+                                    </CustomContent>
                                 </MudFileUpload>
                                 @if (_hasDocument)
                                 {
@@ -583,7 +584,7 @@ else
     {
         try
         {
-            await _form.Validate();
+            await _form.ValidateAsync();
             
             if (!_formValid)
             {

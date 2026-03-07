@@ -9,7 +9,6 @@ public class OfflineQueueService : IOfflineQueueService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IConnectivityService _connectivityService;
-    private bool _isProcessing;
 
     public event EventHandler<int>? PendingCountChanged;
 

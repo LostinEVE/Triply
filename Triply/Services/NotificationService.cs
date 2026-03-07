@@ -199,6 +199,8 @@ public class NotificationService : INotificationService
 
         foreach (var record in maintenanceRecords)
         {
+            var truckId = record.Truck?.TruckId ?? record.TruckId;
+
             // Check by date
             if (record.NextDueDate.HasValue)
             {
@@ -209,7 +211,7 @@ public class NotificationService : INotificationService
                     {
                         Type = NotificationType.MaintenanceOverdue,
                         Severity = NotificationSeverity.Error,
-                        Title = $"Maintenance Overdue - {record.Truck.TruckId}",
+                        Title = $"Maintenance Overdue - {truckId}",
                         Message = $"{record.Type}: {daysOverdue} days overdue",
                         ActionUrl = $"/trucks/{record.TruckId}/maintenance",
                         RelatedData = record
@@ -222,7 +224,7 @@ public class NotificationService : INotificationService
                     {
                         Type = NotificationType.MaintenanceDue,
                         Severity = NotificationSeverity.Warning,
-                        Title = $"Maintenance Due Soon - {record.Truck.TruckId}",
+                        Title = $"Maintenance Due Soon - {truckId}",
                         Message = $"{record.Type}: Due in {daysUntilDue} days",
                         ActionUrl = $"/trucks/{record.TruckId}/maintenance",
                         RelatedData = record
@@ -242,7 +244,7 @@ public class NotificationService : INotificationService
                     {
                         Type = NotificationType.MaintenanceOverdue,
                         Severity = NotificationSeverity.Error,
-                        Title = $"Maintenance Due - {record.Truck.TruckId}",
+                        Title = $"Maintenance Due - {truckId}",
                         Message = $"{record.Type}: At {currentOdometer} miles (due at {record.NextDueOdometer:N0})",
                         ActionUrl = $"/trucks/{record.TruckId}/maintenance",
                         RelatedData = record

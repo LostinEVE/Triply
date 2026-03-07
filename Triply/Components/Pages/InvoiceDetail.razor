@@ -323,9 +323,9 @@ else if (_invoice != null)
         var uri = new Uri(NavigationManager.Uri);
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
         
-        if (query["action"] != null)
+        var action = query["action"];
+        if (!string.IsNullOrWhiteSpace(action))
         {
-            var action = query["action"];
             await HandleActionAsync(action);
         }
     }
@@ -398,7 +398,7 @@ else if (_invoice != null)
         var dialog = await DialogService.ShowAsync<SendInvoiceDialog>("Send Invoice", parameters, options);
         var result = await dialog.Result;
         
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadInvoiceAsync();
         }
@@ -421,7 +421,7 @@ else if (_invoice != null)
         var dialog = await DialogService.ShowAsync<RecordPaymentDialog>("Record Payment", parameters, options);
         var result = await dialog.Result;
         
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadInvoiceAsync();
         }

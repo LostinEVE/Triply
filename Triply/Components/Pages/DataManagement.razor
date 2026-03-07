@@ -126,14 +126,15 @@
                         <MudFileUpload T="IBrowserFile" 
                                       OnFilesChanged="HandleImportFile"
                                       Accept=".json,.zip,.tar.gz,.tgz,.dat,.txt,application/json,application/zip,application/gzip,application/x-tar,application/x-gzip,application/octet-stream">
-                            <ActivatorContent>
+                            <CustomContent Context="fileUpload">
                                 <MudButton Variant="Variant.Outlined"
                                           Color="Color.Info"
                                           FullWidth="true"
-                                          StartIcon="@Icons.Material.Filled.AttachFile">
+                                          StartIcon="@Icons.Material.Filled.AttachFile"
+                                          OnClick="@(async () => await fileUpload.OpenFilePickerAsync())">
                                     Select Backup File
                                 </MudButton>
-                            </ActivatorContent>
+                            </CustomContent>
                         </MudFileUpload>
                     }
                     else
@@ -573,7 +574,7 @@
         var dialog = await DialogService.ShowAsync<ConfirmDialog>("Clear All Data", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await ClearDataAsync();
         }
@@ -613,7 +614,7 @@
         var dialog = await DialogService.ShowAsync<ConfirmDialog>("Reset Database", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             // Double confirmation
             var confirmParameters = new DialogParameters
@@ -626,7 +627,7 @@
             var confirmDialog = await DialogService.ShowAsync<ConfirmDialog>("Final Confirmation", confirmParameters);
             var confirmResult = await confirmDialog.Result;
 
-            if (!confirmResult.Canceled)
+            if (confirmResult is not null && !confirmResult.Canceled)
             {
                 await ResetDatabaseAsync();
             }

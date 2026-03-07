@@ -20,7 +20,7 @@
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
 }
-else if (_truck == null && !_isNew)
+else if (_truck == null)
 {
     <MudAlert Severity="Severity.Error">Truck not found</MudAlert>
 }
@@ -41,7 +41,7 @@ else
         }
     </MudText>
 
-    <MudTabs Elevation="3" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+    <MudTabs Elevation="3" Rounded="true" ApplyEffectsToContainer="true">
         <MudTabPanel Text="Details" Icon="@Icons.Material.Filled.Info">
             <MudGrid>
                 <MudItem xs="12" md="6">
@@ -415,17 +415,23 @@ else
             }
             else
             {
-                _truck = await UnitOfWork.Trucks.GetQueryable()
+                var existingTruck = await UnitOfWork.Trucks.GetQueryable()
                     .FirstOrDefaultAsync(t => t.TruckId == TruckId);
-                
-                if (_truck != null)
+
+                if (existingTruck == null)
                 {
-                    // Load related data
-                    await LoadExpensesAsync();
-                    await LoadFuelEntriesAsync();
-                    await LoadMaintenanceAsync();
-                    await LoadFinancialsAsync();
+                    Snackbar.Add("Truck not found", Severity.Error);
+                    NavigationManager.NavigateTo("/trucks");
+                    return;
                 }
+
+                _truck = existingTruck;
+
+                // Load related data
+                await LoadExpensesAsync();
+                await LoadFuelEntriesAsync();
+                await LoadMaintenanceAsync();
+                await LoadFinancialsAsync();
             }
         }
         catch (Exception ex)

@@ -219,7 +219,6 @@
     private List<MaintenanceRecord> _upcomingMaintenance = new();
     private List<MaintenanceRecord> _overdueMaintenance = new();
     private List<Truck> _trucks = new();
-    private bool _loading = true;
     private bool _showSchedule = false;
     
     // Filters
@@ -253,8 +252,6 @@
     {
         try
         {
-            _loading = true;
-
             IQueryable<MaintenanceRecord> query = UnitOfWork.MaintenanceRecords.GetQueryable()
                 .Include(m => m.Truck);
 
@@ -293,7 +290,6 @@
         }
         finally
         {
-            _loading = false;
         }
     }
 

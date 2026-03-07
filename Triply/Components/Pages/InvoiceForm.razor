@@ -543,7 +543,7 @@ else
     {
         try
         {
-            await _form.Validate();
+            await _form.ValidateAsync();
             
             if (!_formValid)
             {
@@ -577,7 +577,11 @@ else
                 // Update loads to Invoiced status
                 foreach (var lineItem in _invoice.LineItems.Where(li => li.LoadId.HasValue))
                 {
-                    var load = await UnitOfWork.Loads.GetByIdAsync(lineItem.LoadId.Value);
+                    var loadId = lineItem.LoadId;
+                    if (!loadId.HasValue)
+                        continue;
+
+                    var load = await UnitOfWork.Loads.GetByIdAsync(loadId.Value);
                     if (load != null && load.Status == LoadStatus.Delivered)
                     {
                         load.Status = LoadStatus.Invoiced;

@@ -79,8 +79,6 @@
     private List<Load> _unbilledLoads = new();
     private HashSet<Load> _selectedLoads = new();
     private bool _loading = true;
-    private bool _confirmed = false;
-
     protected override async Task OnInitializedAsync()
     {
         await LoadUnbilledLoadsAsync();

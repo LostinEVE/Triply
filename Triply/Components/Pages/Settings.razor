@@ -323,7 +323,7 @@
         var dialog = await DialogService.ShowAsync<ConfirmDialog>("Enable Admin Access", parameters, options);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             // Set admin user ID
             Preferences.Set("DeviceUserId", "admin@triply.app");

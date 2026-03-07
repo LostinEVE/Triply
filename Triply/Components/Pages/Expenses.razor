@@ -64,7 +64,7 @@
                           T="ExpenseCategory?"
                           Variant="Variant.Outlined"
                           Clearable="true"
-                          Multiple="false">
+                          MultiSelection="false">
                     <MudSelectItem T="ExpenseCategory?" Value="@((ExpenseCategory?)null)">All Categories</MudSelectItem>
                     @foreach (ExpenseCategory category in Enum.GetValues(typeof(ExpenseCategory)))
                     {
@@ -368,7 +368,7 @@
         var dialog = await DialogService.ShowAsync<QuickAddExpense>("Add Expense", options);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             await LoadExpensesAsync(); // Refresh the list
             Snackbar.Add("Expense added successfully", Severity.Success);

@@ -261,7 +261,7 @@
         var dialog = await DialogService.ShowAsync<QuickAddExpense>("Quick Add Expense", options);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             // Expense was added successfully
             StateHasChanged();

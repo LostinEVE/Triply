@@ -81,7 +81,7 @@ else
                     {
                         <MudChart ChartType="ChartType.Line" 
                                  ChartSeries="@_expensesTrendSeries" 
-                                 XAxisLabels="@_expensesTrendLabels"
+                                 ChartLabels="@_expensesTrendLabels"
                                  Width="100%" 
                                  Height="300px" />
                     }
@@ -109,8 +109,8 @@ else
                     {
                         <MudChart T="double" 
                                  ChartType="ChartType.Donut" 
-                                 InputData="@_categoryBreakdownData" 
-                                 InputLabels="@_categoryBreakdownLabels"
+                                 ChartSeries="@_categoryBreakdownSeries" 
+                                 ChartLabels="@_categoryBreakdownLabels"
                                  Width="100%" 
                                  Height="280px" />
                     }
@@ -201,6 +201,7 @@ else
     
     private double[] _categoryBreakdownData = Array.Empty<double>();
     private string[] _categoryBreakdownLabels = Array.Empty<string>();
+    private List<ChartSeries<double>> _categoryBreakdownSeries = new();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -272,6 +273,10 @@ else
         var topCategories = _categorySummaries.Take(6).ToList();
         _categoryBreakdownData = topCategories.Select(c => (double)c.Total).ToArray();
         _categoryBreakdownLabels = topCategories.Select(c => c.Category.ToString()).ToArray();
+        _categoryBreakdownSeries = new List<ChartSeries<double>>
+        {
+            new() { Name = "Categories", Data = _categoryBreakdownData }
+        };
     }
 
     private void CalculateTrendData()

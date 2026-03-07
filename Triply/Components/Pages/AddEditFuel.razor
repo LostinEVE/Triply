@@ -246,13 +246,14 @@ else
                                               Accept="image/*" 
                                               OnFilesChanged="OnFileSelected"
                                               MaximumFileCount="1">
-                                    <ActivatorContent>
+                                    <CustomContent Context="fileUpload">
                                         <MudButton Variant="Variant.Filled"
                                                   Color="Color.Primary"
-                                                  StartIcon="@Icons.Material.Filled.Upload">
+                                                  StartIcon="@Icons.Material.Filled.Upload"
+                                                  OnClick="@(async () => await fileUpload.OpenFilePickerAsync())">
                                             Upload Receipt
                                         </MudButton>
-                                    </ActivatorContent>
+                                    </CustomContent>
                                 </MudFileUpload>
                                 
                                 <MudButton Variant="Variant.Filled" 
@@ -326,9 +327,10 @@ else
         var uri = new Uri(NavigationManager.Uri);
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
         
-        if (query["truckId"] != null)
+        var truckId = query["truckId"];
+        if (!string.IsNullOrWhiteSpace(truckId))
         {
-            _fuelEntry.TruckId = query["truckId"];
+            _fuelEntry.TruckId = truckId;
         }
         
         await LoadTruckStopSuggestionsAsync();
@@ -564,7 +566,7 @@ else
     {
         try
         {
-            await _form.Validate();
+            await _form.ValidateAsync();
             
             if (!_formValid)
             {

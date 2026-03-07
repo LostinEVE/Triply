@@ -104,7 +104,7 @@
     {
         try
         {
-            await _form.Validate();
+            await _form.ValidateAsync();
 
             await UnitOfWork.Expenses.AddAsync(_expense);
             await UnitOfWork.SaveChangesAsync();

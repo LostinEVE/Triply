@@ -97,8 +97,6 @@
 
     private MudForm _form = null!;
     private bool _formValid = false;
-    private bool _paymentSaved = false;
-
     private DateTime? _paymentDate;
     private decimal _paymentAmount;
     private string _paymentMethod = "Check";
@@ -128,7 +126,7 @@
     {
         try
         {
-            await _form.Validate();
+            await _form.ValidateAsync();
             
             if (!_formValid)
             {
@@ -185,7 +183,11 @@
             {
                 foreach (var lineItem in Invoice.LineItems.Where(li => li.LoadId.HasValue))
                 {
-                    var load = await UnitOfWork.Loads.GetByIdAsync(lineItem.LoadId.Value);
+                    var loadId = lineItem.LoadId;
+                    if (!loadId.HasValue)
+                        continue;
+
+                    var load = await UnitOfWork.Loads.GetByIdAsync(loadId.Value);
                     if (load != null && load.Status == LoadStatus.Invoiced)
                     {
                         load.Status = LoadStatus.Paid;

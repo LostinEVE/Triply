@@ -337,7 +337,7 @@ else
         var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Customer", parameters, options);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is not null && !result.Canceled)
         {
             try
             {
@@ -355,7 +355,7 @@ else
                         options);
 
                     var secondResult = await secondConfirm.Result;
-                    if (secondResult.Canceled) return;
+                    if (secondResult is null || secondResult.Canceled) return;
                 }
 
                 await UnitOfWork.Customers.DeleteAsync(_customer);
